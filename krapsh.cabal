@@ -1,0 +1,148 @@
+name:                krapsh
+version:             0.1.6.0
+synopsis:            Haskell bindings for Spark Dataframes and Datasets
+description:         Please see README.md
+homepage:            https://github.com/krapsh/kraps-haskell
+license:             Apache-2.0
+license-file:        LICENSE
+author:              krapsh
+maintainer:          krapsh@yandex.com
+copyright:           2016 Kraps-Haskell contributors
+category:            Web, Big data
+build-type:          Simple
+-- extra-source-files:
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Spark.Core,
+                       Spark.Core.Context,
+                       Spark.Core.Column,
+                       Spark.Core.ColumnFunctions,
+                       Spark.Core.Dataset,
+                       Spark.Core.Functions,
+                       Spark.Core.Internal.Caching,
+                       Spark.Core.Internal.ComputeDag,
+                       Spark.Core.Internal.ContextInternal,
+                       Spark.Core.Internal.ContextStructures,
+                       Spark.Core.Internal.DAGFunctions,
+                       Spark.Core.Internal.DAGStructures,
+                       Spark.Core.Internal.DatasetFunctions,
+                       Spark.Core.Internal.DatasetStructures,
+                       Spark.Core.Internal.LocalDataFunctions,
+                       Spark.Core.Internal.OpFunctions,
+                       Spark.Core.Internal.OpStructures,
+                       Spark.Core.Internal.Paths,
+                       Spark.Core.Internal.PathsUntyped,
+                       Spark.Core.Internal.Utilities,
+                       Spark.Core.Internal.TypesStructures,
+                       Spark.Core.Internal.TypesFunctions,
+                       Spark.Core.Row,
+                       Spark.Core.StructuresInternal,
+                       Spark.Core.Try,
+                       Spark.Core.Types
+  other-modules:       Spark.Core.Internal.CachingUntyped,
+                       Spark.Core.Internal.ColumnFunctions,
+                       Spark.Core.Internal.AlgebraStructures,
+                       Spark.Core.Internal.ColumnStructures,
+                       Spark.Core.Internal.ContextInteractive,
+                       Spark.Core.Internal.ContextIOInternal,
+                       Spark.Core.Internal.Client,
+                       Spark.Core.Internal.AggregationFunctions,
+                       Spark.Core.Internal.FunctionsInternals,
+                       Spark.Core.Internal.LocatedBase,
+                       Spark.Core.Internal.RowGenerics,
+                       Spark.Core.Internal.RowGenericsFrom,
+                       Spark.Core.Internal.RowStructures,
+                       Spark.Core.Internal.RowUtils,
+                       Spark.Core.Internal.TypesGenerics
+  build-depends:       aeson,
+                       aeson-pretty,
+                       base >= 4.8.1 && < 5,
+                       base16-bytestring,
+                       binary == 0.7.5.0,
+                       bytestring,
+                       containers,
+                       cryptohash-sha256,
+                       deepseq,
+                       exceptions,
+                       formatting,
+                       hashable,
+                       lens,
+                       monad-logger,
+                       QuickCheck,
+                       random,
+                       scientific,
+                       SHA,
+                       mtl,
+                       text,
+                       text-format,
+                       transformers,
+                       unordered-containers,
+                       vector,
+                       wreq
+  ghc-options:         -Wall
+--  ghc-options:         -fprof-auto --enable-library-profiling -O0 -- -ddump-deriv -O0 -rtsopts=all
+  default-language:    Haskell2010
+
+
+test-suite krapsh-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  other-modules:       Spark.Core.ContextSpec,
+                       Spark.Core.DatasetSpec,
+                       Spark.Core.Internal.CachingSpec,
+                       Spark.Core.Internal.LocalDataFunctionsSpec,
+                       Spark.Core.Internal.OpFunctionsSpec,
+                       Spark.Core.Internal.RowUtilsSpec,
+                       Spark.Core.Internal.DAGFunctionsSpec,
+                       Spark.Core.Internal.PathsSpec,
+                       Spark.Core.PathSpec,
+                       Spark.Core.ProjectionsSpec,
+                       Spark.Core.RowToSQLSpec,
+                       Spark.Core.TypesSpec,
+                       Spark.Core.ColumnSpec,
+                       Spark.Core.SimpleExamplesSpec
+  build-depends:       aeson
+                     , base
+                     , bytestring
+                     , containers
+                     , formatting
+                     , krapsh
+                     , hspec == 2.*
+                     , text
+                     , raw-strings-qq
+                     , QuickCheck
+                     , vector
+  ghc-options:         -fhpc -O0 -Wall
+--  ghc-options:         -ddump-deriv -O0 -rtsopts=all -prof -auto-all
+  default-language:    Haskell2010
+
+test-suite krapsh-test-integration
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test-integration
+  main-is:             Spec.hs
+  other-modules:       Spark.Core.CachingSpec,
+                       Spark.Core.CollectSpec,
+                       Spark.Core.IntegrationUtilities,
+                       Spark.Core.SimpleAddSpec
+  build-depends:       aeson
+                     , base
+                     , bytestring
+                     , containers
+                     , formatting
+                     , krapsh
+                     , hspec == 2.*
+                     , text
+                     , raw-strings-qq
+                     , QuickCheck
+                     , vector
+  ghc-options:         -fhpc -O0 -Wall
+--  ghc-options:         -ddump-deriv -O0 -rtsopts=all -prof -auto-all
+  default-language:    Haskell2010
+
+
+source-repository head
+  type:     git
+  location: https://github.com/krapsh/kraps-haskell
