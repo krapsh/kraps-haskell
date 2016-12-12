@@ -9,3 +9,4 @@ extra-deps:
 #- Crypto-4.2.5.1
 #- text-1.2.2.1
 resolver: lts-6.15
+pvp-bounds: both
