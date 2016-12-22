@@ -32,10 +32,20 @@ showCallStack stk = case getCallStack stk of
 
 #else
 
-import GHC.Stack
+import GHC.Stack(HasCallStack, CallStack, prettyCallStack)
+import qualified GHC.Stack()
+import Data.Text(Text, unpack)
+import qualified Prelude
+import Prelude((.))
 
 {-# DEPRECATED showCallStack "use GHC.Stack.prettyCallStack instead" #-}
-showCallStack :: CallStack -> String
+showCallStack :: CallStack -> Prelude.String
 showCallStack = prettyCallStack
+
+error :: HasCallStack => Text -> a
+error = Prelude.error . unpack
+
+undefined :: HasCallStack => a
+undefined = error "Prelude.undefined"
 
 #endif

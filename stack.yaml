@@ -6,7 +6,5 @@ extra-deps:
 - generator-0.5.5
 - cryptohash-sha256-0.11.100.1
 - aeson-pretty-0.8.2
-#- Crypto-4.2.5.1
-#- text-1.2.2.1
-resolver: lts-6.15
+resolver: lts-7.13
 pvp-bounds: both
