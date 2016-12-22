@@ -60,7 +60,7 @@ library
                        aeson-pretty,
                        base >= 4.8.1 && < 5,
                        base16-bytestring,
-                       binary == 0.7.5.0,
+                       binary == 0.8.3.0,
                        bytestring,
                        containers,
                        cryptohash-sha256,

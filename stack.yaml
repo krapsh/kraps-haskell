@@ -8,4 +8,4 @@ extra-deps:
 - aeson-pretty-0.8.2
 #- Crypto-4.2.5.1
 #- text-1.2.2.1
-resolver: lts-6.15
+resolver: lts-7.13
