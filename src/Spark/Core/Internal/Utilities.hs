@@ -93,7 +93,7 @@ infixl 1 @@
 
 -- | Missing implementations in the code base.
 missing :: (LB.HasCallStack) => Text -> a
-missing msg = LB.error $ T.concat ["MISSING IMPLEMENTATION: ", msg]
+missing msg = LB.error . T.unpack $ ("MISSING IMPLEMENTATION: " <> msg)
 
 {-| The function that is used to trigger exception due to internal programming
 errors.
@@ -102,7 +102,7 @@ Currently, all programming errors simply trigger an exception. All these
 impure functions are tagged with an implicit call stack argument.
 -}
 failure :: (LB.HasCallStack) => Text -> a
-failure msg = LB.error (T.concat ["FAILURE in Spark. Hint: ", msg])
+failure msg = LB.error . T.unpack $ (T.concat ["FAILURE in Spark. Hint: ", msg])
 
 failure' :: (LB.HasCallStack) => Format Text (a -> Text) -> a -> c
 failure' x = failure . sformat x
@@ -115,7 +115,7 @@ This function is not total.
 -}
 forceRight :: (LB.HasCallStack, Show a) => Either a b -> b
 forceRight (Right b) = b
-forceRight (Left a) = LB.error $
+forceRight (Left a) = LB.error . T.unpack $
   sformat ("Failure from either, got instead a left: "%shown) a
 
 -- | Force the complete evaluation of a list to WNF.
