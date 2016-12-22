@@ -1,7 +1,12 @@
 name:                krapsh
 version:             0.1.6.0
 synopsis:            Haskell bindings for Spark Dataframes and Datasets
-description:         Please see README.md
+description:         Krapsh is an exploration vehicle for developing safe,
+                     robust and reliable data pipelines over Apache Spark, using
+                     the DataFrame API.
+
+                     In order to use it, you must launch Spark with the
+                     kraps-server module installed.
 homepage:            https://github.com/krapsh/kraps-haskell
 license:             Apache-2.0
 license-file:        LICENSE
