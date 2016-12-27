@@ -79,13 +79,13 @@ instance (GToSQL a, GToSQL b) => GToSQL (a :+: b) where
 --   _g2cell !(M1 x) = let !y = _g2cell x in
 --     trace ("GToSQL M1: y = " ++ show y) y
 
-instance (GToSQL a, Constructor c) => GToSQL (M1 C c a) where
+instance (GToSQL a) => GToSQL (M1 C c a) where
   _g2buffer (M1 x) = let !y = _g2buffer x in y
 
-instance (GToSQL a, Selector c) => GToSQL (M1 S c a) where
+instance (GToSQL a) => GToSQL (M1 S c a) where
   _g2buffer (M1 x) = let !y = ConsData [_g2cell x] in y
 
-instance (GToSQL a, Datatype c) => GToSQL (M1 D c a) where
+instance (GToSQL a) => GToSQL (M1 D c a) where
   _g2buffer (M1 x) =
     case _g2buffer x of
       ConsData cs -> BuiltCell $ RowArray (V.fromList cs)

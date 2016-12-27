@@ -32,7 +32,6 @@ import Spark.Core.Internal.ColumnFunctions
 import Spark.Core.Internal.DatasetFunctions
 import Spark.Core.Internal.DatasetStructures
 import Spark.Core.Internal.Utilities
-import Spark.Core.Internal.TypesGenerics
 import Spark.Core.Internal.TypesFunctions
 import Spark.Core.Internal.TypesStructures
 import Spark.Core.Internal.OpStructures
@@ -94,14 +93,14 @@ class TupleEquivalence to tup | to -> tup where
 -- fun' = undefined
 
 -- | Represents a dataframe as a single column.
-asCol :: (HasCallStack) => Dataset a -> Column a a
+asCol :: Dataset a -> Column a a
 asCol ds =
   -- Simply recast the dataset as a column.
   -- The empty path indicates that we are wrapping the whole thing.
   iEmptyCol ds (unsafeCastType $ nodeType ds) (FieldPath V.empty)
 
 -- | Packs a single column into a dataframe.
-pack1 :: (HasCallStack) => Column ref a -> Dataset a
+pack1 :: Column ref a -> Dataset a
 pack1 c =
   emptyDataset (NodeStructuredTransform (colOp c)) (colType c)
       `parents` [untyped (colOrigin c)]
@@ -123,7 +122,7 @@ The type of the dataset must be provided in order to have proper type inference.
 
 TODO: example.
 -}
-pack :: forall ref a b. (StaticColPackable2 ref a b, HasCallStack) => a -> Dataset b
+pack :: forall ref a b. (StaticColPackable2 ref a b) => a -> Dataset b
 pack z =
   let c = _staticPackAsColumn2 z :: ColumnData ref b
   in pack1 c
@@ -132,7 +131,7 @@ pack z =
 
 Columns must have different names, or an error is returned.
 -}
-struct' :: (HasCallStack) => [DynColumn] -> DynColumn
+struct' :: [DynColumn] -> DynColumn
 struct' cols = do
   l <- sequence cols
   let fields = (colFieldName &&& id) <$> l
@@ -143,7 +142,7 @@ struct' cols = do
 The field names of the columns are discarded, and replaced by the field names
 of the structure.
 -}
-struct :: forall ref a b. (StaticColPackable2 ref a b, HasCallStack) => a -> Column ref b
+struct :: forall ref a b. (StaticColPackable2 ref a b) => a -> Column ref b
 struct = _staticPackAsColumn2
 
 
@@ -170,7 +169,6 @@ instance forall a1 a2. TupleEquivalence (a1, a2) (a1, a2) where
 
 -- The equations that bind column packable stuff through their tuple equivalents
 instance forall ref b a1 a2 z1 z2. (
-          SQLTypeable b,
           TupleEquivalence b (a1, a2),
           StaticColPackable2 ref z1 a1,
           StaticColPackable2 ref z2 a2) =>
@@ -183,7 +181,6 @@ instance forall ref b a1 a2 z1 z2. (
       in _unsafeBuildStruct [x1, x2] names
 
 instance forall ref b a1 a2 a3 z1 z2 z3. (
-          SQLTypeable b,
           TupleEquivalence b (a1, a2, a3),
           StaticColPackable2 ref z1 a1,
           StaticColPackable2 ref z2 a2,
@@ -197,8 +194,7 @@ instance forall ref b a1 a2 a3 z1 z2 z3. (
         names = tupleFieldNames :: NameTuple b
       in _unsafeBuildStruct [x1, x2, x3] names
 
-_unsafeBuildStruct :: (HasCallStack, SQLTypeable x) =>
-  [UntypedColumnData] -> NameTuple x -> Column ref x
+_unsafeBuildStruct :: [UntypedColumnData] -> NameTuple x -> Column ref x
 _unsafeBuildStruct cols (NameTuple names) =
   if length cols /= length names
     then failure $ sformat ("The number of columns and names differs:"%sh%" and "%sh) cols names

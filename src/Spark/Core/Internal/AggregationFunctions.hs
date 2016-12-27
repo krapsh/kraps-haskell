@@ -35,7 +35,7 @@ colSum = applyUniAgg (_sumAgg :: UniversalAggregator a a)
 
 -}
 -- TODO use Long for the return data type.
-count :: forall a. (SQLTypeable a) => Dataset a -> LocalData Int
+count :: forall a. Dataset a -> LocalData Int
 count ds = applyUniAgg (_countAgg2 :: UniversalAggregator a Int) (asCol ds)
 
 {-| Collects all the elements of a column into a list.
@@ -98,7 +98,7 @@ applyUniAgg ua c =
 
 
 -- (internal)
-simpleOp1Typed :: (IsLocality loca, IsLocality locb) =>
+simpleOp1Typed :: (IsLocality locb) =>
   SQLType b ->
   T.Text ->
   ComputeNode loca a -> ComputeNode locb b
@@ -112,19 +112,19 @@ simpleOp1Typed sqltb name =
   in nodeOpToFun1Typed sqltb no
 
 -- (internal)
-simpleOp1 :: forall a b loca locb. (IsLocality loca, IsLocality locb, SQLTypeable a, SQLTypeable b) =>
+simpleOp1 :: forall a b loca locb. (IsLocality locb, SQLTypeable b) =>
   T.Text ->
   ComputeNode loca a -> ComputeNode locb b
 simpleOp1 = simpleOp1Typed (buildType :: SQLType b)
 
 -- (internal)
-simpleOp2 :: forall a1 a2 b loc1 loc2 locb. (SQLTypeable b, IsLocality loc1, IsLocality loc2, IsLocality locb) =>
+simpleOp2 :: forall a1 a2 b loc1 loc2 locb. (SQLTypeable b, IsLocality locb) =>
   T.Text ->
   ComputeNode loc1 a1 -> ComputeNode loc2 a2 -> ComputeNode locb b
 simpleOp2 = simpleOp2Typed (buildType :: SQLType b)
 
 -- (internal)
-simpleOp2Typed :: (IsLocality loc1, IsLocality loc2, IsLocality locb) =>
+simpleOp2Typed :: (IsLocality locb) =>
   SQLType b ->
   T.Text ->
   ComputeNode loc1 a1 -> ComputeNode loc2 a2 -> ComputeNode locb b
@@ -143,7 +143,7 @@ _unsafeExtractOp (NodeOpaqueAggregator so) = so
 _unsafeExtractOp (NodeDistributedOp so) = so
 _unsafeExtractOp x = failure $ sformat ("Expected standard op, found "%shown) x
 
-_countAgg2 :: (SQLTypeable a) => UniversalAggregator a Int
+_countAgg2 :: UniversalAggregator a Int
 _countAgg2 = UniversalAggregator {
     uaInitialOuter = simpleOp1 "org.spark.Count",
     uaMergeBuffer = (+)

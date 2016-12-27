@@ -39,7 +39,7 @@ buildType = _buildType
 -- See also buildType on how to use it.
 class SQLTypeable a where
   _genericTypeFromValue :: a -> GenericType
-  default _genericTypeFromValue :: (Generic a, GenSQLTypeable (Rep a)) => a -> GenericType
+  default _genericTypeFromValue :: (GenSQLTypeable (Rep a)) => a -> GenericType
   _genericTypeFromValue _ = genBuildType (Proxy :: Proxy a)
 
   -- | The only function that should matter for users in this file.
@@ -55,8 +55,9 @@ type GenericType = SQLType GenericRow
 
 
 -- Generic building type.
-genBuildType :: forall a. (Generic a, GenSQLTypeable (Rep a)) => Proxy a -> GenericType
+genBuildType :: forall a. (GenSQLTypeable (Rep a)) => Proxy a -> GenericType
 genBuildType _ = genTypeFromProxy (Proxy :: Proxy (Rep a))
+
 
 
 instance SQLTypeable Int where

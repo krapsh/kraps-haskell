@@ -97,7 +97,7 @@ be in topological order.
 
 All the vertices referred by edges must be present in the list of vertices.
 -}
-buildGraphFromList :: forall v e. (Show v, Show e) =>
+buildGraphFromList :: forall v e. (Show v) =>
   [Vertex v] -> [Edge e] -> DagTry (Graph v e)
 buildGraphFromList vxs eds = do
   -- 1. Group the edges by start point
@@ -217,7 +217,7 @@ graphSinks g =
   in filter f (toList (gVertices g))
 
 -- | Flips the edges of this graph (it is also a DAG)
-reverseGraph :: forall v e. (HasCallStack, Show v, Show e) => Graph v e -> Graph v e
+reverseGraph :: forall v e. Graph v e -> Graph v e
 reverseGraph g =
   let
     vxMap = M.fromList ((vertexId &&& id) <$> toList (gVertices g))
@@ -239,7 +239,7 @@ reverseGraph g =
 
 -- | A generic transform over the graph that may account for potential failures
 -- in the process.
-graphMapVertices :: forall m v e v2. (HasCallStack, Show v2, Show v, Show e, Monad m) =>
+graphMapVertices :: forall m v e v2. (HasCallStack, Show v2, Monad m) =>
   Graph v e -> -- The start graph
   (v -> [(v2,e)] -> m v2) -> -- The transform
   m (Graph v2 e)

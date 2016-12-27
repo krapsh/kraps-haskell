@@ -10,10 +10,13 @@ import Test.Hspec.QuickCheck
 
 import Spark.Core.Types
 import Spark.Core.Internal.TypesFunctions
+import Spark.Core.Internal.TypesGenerics()
 
 data TestStruct1 = TestStruct1 {
   ts1f1 :: Int,
-  ts1f2 :: Maybe Int } deriving (Show, Generic, SQLTypeable)
+  ts1f2 :: Maybe Int } deriving (Show, Generic)
+
+instance SQLTypeable TestStruct1
 
 data TestStruct2 = TestStruct2 { ts2f1 :: [Int] } deriving (Show, Generic, SQLTypeable)
 
