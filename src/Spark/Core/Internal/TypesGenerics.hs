@@ -12,11 +12,9 @@
 module Spark.Core.Internal.TypesGenerics where
 
 import qualified Data.Vector as V
-import Data.Text(Text, pack)
-import Data.Proxy
+import qualified Data.Text as T
 import GHC.Generics
 import Formatting
-import Debug.Trace
 
 import Spark.Core.Internal.TypesStructures
 import Spark.Core.Internal.TypesFunctions
@@ -28,7 +26,7 @@ import Spark.Core.StructuresInternal(FieldName(..), unsafeFieldName)
 -- Given a tag on a type, returns the equivalent SQL type.
 -- This is the type for a cell, not for a row.
 -- TODO(kps) more documentation
-buildType :: (SQLTypeable a) => SQLType a
+buildType :: (HasCallStack, SQLTypeable a) => SQLType a
 buildType = _buildType
 
 
@@ -38,44 +36,41 @@ buildType = _buildType
 -- used by Spark.
 -- See also buildType on how to use it.
 class SQLTypeable a where
-  _genericTypeFromValue :: a -> GenericType
-  default _genericTypeFromValue :: (Generic a, GenSQLTypeable (Rep a)) => a -> GenericType
-  _genericTypeFromValue _ = genBuildType (Proxy :: Proxy a)
+  _genericTypeFromValue :: (HasCallStack) => a -> GenericType
+  default _genericTypeFromValue :: (HasCallStack, Generic a, GenSQLTypeable (Rep a)) => a -> GenericType
+  _genericTypeFromValue x = genTypeFromProxy (from x)
 
-  -- | The only function that should matter for users in this file.
-  -- Given a type, returns the SQL representation of this type.
-  _buildType :: SQLType a
-  _buildType =
-    let !dt = _genericTypeFromValue (undefined :: a)
-        SQLType u = dt in SQLType u
-
--- These a private types that should not be used elsewhere.
-data GenericRow
-type GenericType = SQLType GenericRow
+-- Generic SQLTypeable
+class GenSQLTypeable f where
+  genTypeFromProxy :: (HasCallStack) => f a -> GenericType
 
 
--- Generic building type.
-genBuildType :: forall a. (Generic a, GenSQLTypeable (Rep a)) => Proxy a -> GenericType
-genBuildType _ = genTypeFromProxy (Proxy :: Proxy (Rep a))
+-- | The only function that should matter for users in this file.
+-- Given a type, returns the SQL representation of this type.
+_buildType :: forall a. (HasCallStack, SQLTypeable a) => SQLType a
+_buildType =
+  let dt = _genericTypeFromValue (undefined :: a)
+  in SQLType dt
 
+type GenericType = DataType
 
 instance SQLTypeable Int where
-  _genericTypeFromValue _ = SQLType (StrictType IntType)
+  _genericTypeFromValue _ = StrictType IntType
 
-instance SQLTypeable Text where
-  _genericTypeFromValue _ = SQLType (StrictType StringType)
+instance SQLTypeable T.Text where
+  _genericTypeFromValue _ = StrictType StringType
 
 instance {-# INCOHERENT #-} SQLTypeable String where
-  _genericTypeFromValue _ = SQLType (StrictType StringType)
+  _genericTypeFromValue _ = StrictType StringType
 
 instance SQLTypeable a => SQLTypeable (Maybe a) where
   _genericTypeFromValue _ = let SQLType dt = buildType :: (SQLType a) in
-    (SQLType . NullableType . iInnerStrictType) dt
+    (NullableType . iInnerStrictType) dt
 
 instance {-# OVERLAPPABLE #-} SQLTypeable a => SQLTypeable [a] where
   _genericTypeFromValue _ =
     let SQLType dt = buildType :: (SQLType a) in
-      (SQLType . StrictType . ArrayType) dt
+      (StrictType . ArrayType) dt
 
 instance forall a1 a2. (
     SQLTypeable a2,
@@ -86,69 +81,62 @@ instance forall a1 a2. (
       SQLType t2 = buildType :: SQLType a2
     in _buildTupleStruct [t1, t2]
 
-_buildTupleStruct :: [DataType] -> SQLType x
+_buildTupleStruct :: [GenericType] -> GenericType
 _buildTupleStruct dts =
-  let fnames = unsafeFieldName . pack. ("_" ++) . show <$> ([1..] :: [Int])
+  let fnames = unsafeFieldName . T.pack. ("_" ++) . show <$> ([1..] :: [Int])
       fs = uncurry StructField <$> zip fnames dts
-  in SQLType . StrictType . Struct . StructType $ V.fromList fs
+  in StrictType . Struct . StructType $ V.fromList fs
 
 -- instance (SQLTypeable a, SQLTypeable b) => SQLTypeable (a,b) where
 --   _genericTypeFromValue _ = _genericTypeFromValue (undefined :: a) ++ _genericTypeFromValue (undefined :: b)
 
--- Generic SQLTypeable
-class GenSQLTypeable a where
-  genTypeFromProxy :: Proxy a -> GenericType
+instance (GenSQLTypeable f) => GenSQLTypeable (M1 D c f) where
+  genTypeFromProxy m = genTypeFromProxy (unM1 m)
 
--- Datatype
-instance GenSQLTypeable f => GenSQLTypeable (M1 D x f) where
-  genTypeFromProxy _ = genTypeFromProxy (Proxy :: Proxy f)
-
--- Constructor Metadata
 instance (GenSQLTypeable f, Constructor c) => GenSQLTypeable (M1 C c f) where
-  genTypeFromProxy _
-    | conIsRecord (undefined :: t c f a) =
-        let !dt = genTypeFromProxy (Proxy :: Proxy f) in
+  genTypeFromProxy m
+    | conIsRecord m =
+        let x = unM1 m
+            dt = genTypeFromProxy x in
           dt
     | otherwise =
         -- It is assumed to be a newtype and we are going to unwrap it
-        let !dt1 = genTypeFromProxy (Proxy :: Proxy f)
-        in case iSingleField (unSQLType dt1) of
-          Just dt -> SQLType dt
+        let !dt1 = genTypeFromProxy (unM1 m)
+        in case iSingleField dt1 of
+          Just dt -> dt
           Nothing ->
             failure $ sformat ("M1 C "%sh%" dt1="%sh) n dt1
-              where m = undefined :: t c f a
-                    n = conName m
+              where n = conName m
 
 -- Selector Metadata
 instance (GenSQLTypeable f, Selector c) => GenSQLTypeable (M1 S c f) where
-  genTypeFromProxy _ =
-    let !st = genTypeFromProxy (Proxy :: Proxy f)
-        m = undefined :: t c f a
+  genTypeFromProxy m =
+    let st = genTypeFromProxy (unM1 m)
         n = selName m
-        SQLType innerdt = st
-        field = StructField { structFieldName = FieldName $ pack n, structFieldType = innerdt }
+        field = StructField { structFieldName = FieldName $ T.pack n, structFieldType = st }
         st2 = StructType (V.singleton field) in
-      SQLType (StrictType $ Struct st2)
+      StrictType $ Struct st2
 
--- Constructor Paramater
-instance (GenSQLTypeable (Rep f), SQLTypeable f) => GenSQLTypeable (K1 R f) where
-  genTypeFromProxy _ = _genericTypeFromValue (undefined :: f)
+instance (SQLTypeable a) => GenSQLTypeable (K1 R a) where
+  genTypeFromProxy m = _genericTypeFromValue (unK1 m)
 
 -- Sum branch
 instance (GenSQLTypeable a, GenSQLTypeable b) => GenSQLTypeable (a :+: b) where
-  genTypeFromProxy _ =
-    let !y1 = genTypeFromProxy (Proxy :: Proxy a)
-        !y2 = genTypeFromProxy (Proxy :: Proxy b) in
-      -- TODO: need to prune the branch and throw an error here
-      trace ("SUM: y1=" ++ show y1 ++ " y2=" ++ show y2) y1
+  genTypeFromProxy (L1 x) = genTypeFromProxy x
+  genTypeFromProxy (R1 x) = genTypeFromProxy x
 
 -- Product branch
 instance (GenSQLTypeable a, GenSQLTypeable b) => GenSQLTypeable (a :*: b) where
-  genTypeFromProxy _ =
-    let y1 = genTypeFromProxy (Proxy :: Proxy a)
-        y2 = genTypeFromProxy (Proxy :: Proxy b) in case (y1, y2) of
-        (SQLType (StrictType (Struct s1)), SQLType (StrictType (Struct s2))) ->
-          (SQLType . StrictType . Struct) s where
+  genTypeFromProxy z =
+    -- Due to optimizations that I do not understand, the decomposition has to
+    -- be done inside the function.
+    -- Otherwise, the value (which is undefined) gets to be evaluated, and breaks
+    -- the code.
+    let (x1 :*: x2) = z
+        y1 = genTypeFromProxy x1
+        y2 = genTypeFromProxy x2 in case (y1, y2) of
+        (StrictType (Struct s1), StrictType (Struct s2)) ->
+          (StrictType . Struct) s where
             fs = structFields s1 V.++ structFields s2
             s = StructType fs
         _ -> failure $ sformat ("should not happen: left="%sh%" right="%sh) y1 y2

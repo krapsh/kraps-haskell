@@ -29,7 +29,6 @@ import Formatting
 
 import Spark.Core.Try
 import Spark.Core.Internal.DAGStructures
-import Spark.Core.Internal.Utilities
 import Spark.Core.Internal.ComputeDag
 import Spark.Core.StructuresInternal
 
@@ -47,13 +46,13 @@ data PathEdge = SameLevelEdge | InnerEdge deriving (Show, Eq)
 
 -- Assigns paths in a graph.
 --
-computePaths :: (HasCallStack, HasNodeName v) =>
+computePaths :: (HasNodeName v) =>
   ComputeDag v PathEdge -> Try (M.Map VertexId NodePath)
 computePaths cd =
   let nodecg = mapVertexData getNodeName cd
   in _computePaths nodecg
 
-assignPaths' :: (HasCallStack, HasNodeName v) =>
+assignPaths' :: (HasNodeName v) =>
   M.Map VertexId NodePath -> ComputeDag v e -> ComputeDag v e
 assignPaths' m cd =
   let f vx =
@@ -65,8 +64,7 @@ assignPaths' m cd =
 -- The main function to perform the pass assignments.
 -- It starts from the graph of dependencies and from the local name info,
 -- and computes the complete paths (if possible), starting from the fringe.
-_computePaths :: (HasCallStack) =>
-  ComputeDag NodeName PathEdge -> Try (M.Map VertexId NodePath)
+_computePaths :: ComputeDag NodeName PathEdge -> Try (M.Map VertexId NodePath)
 _computePaths cg =
   let
     scopes = iGetScopes0 (toList . cdOutputs $ cg) (_splitParents' (cdEdges cg))
@@ -168,17 +166,17 @@ _getScopes' splitter mScopeId boundary un scopes =
       innerParents = psInner split
       -- A fold on the parents
       parF :: Vertex a -> Scopes -> Scopes
-      parF v s =
+      parF =
         -- Same boundary and parent, but update the scopes
-        _getScopes' splitter mScopeId boundary v s
+        _getScopes' splitter mScopeId boundary
       scopesPar = foldr' parF scopes logParents
       -- Now work on the inner nodes:
       vid = vertexId un
       boundary' = S.fromList (vertexId <$> logParents)
       inF :: Vertex a -> Scopes -> Scopes
-      inF v s =
+      inF =
         -- parent is current, boundary is current logical
-        _getScopes' splitter (Just vid) boundary' v s
+        _getScopes' splitter (Just vid) boundary'
       scopesIn = foldr' inF scopesPar innerParents
       scopesFinal = scopesIn
           `mergeScopes` _singleScope mScopeId vid

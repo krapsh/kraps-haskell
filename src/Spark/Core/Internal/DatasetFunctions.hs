@@ -273,8 +273,7 @@ depends node l = updateNode node $ \n ->
 -- (internal)
 -- Tries to update the locality of a node. This is a checked cast.
 -- TODO: remove, it is only used to cast to local frame
-castLocality :: forall a loc loc'. (
-  CheckedLocalityCast loc, CheckedLocalityCast loc') =>
+castLocality :: forall a loc loc'. (CheckedLocalityCast loc') =>
     ComputeNode loc a -> Try (ComputeNode loc' a)
 castLocality node =
   let
@@ -352,31 +351,31 @@ fun2ToOpTyped :: forall a1 a2 a loc1 loc2 loc. (IsLocality loc1, IsLocality loc2
 fun2ToOpTyped sqlt1 sqlt2 f = nodeOp $ f (placeholderTyped sqlt1) (placeholderTyped sqlt2)
 
 -- | (internal) conversion
-nodeOpToFun1 :: forall a1 a2 loc1 loc2. (IsLocality loc1, SQLTypeable a2, IsLocality loc2) =>
+nodeOpToFun1 :: forall a1 a2 loc1 loc2. (SQLTypeable a2, IsLocality loc2) =>
   NodeOp -> ComputeNode loc1 a1 -> ComputeNode loc2 a2
 nodeOpToFun1 = nodeOpToFun1Typed (buildType :: SQLType a2)
 
 -- | (internal) conversion
-nodeOpToFun1Typed :: forall a1 a2 loc1 loc2. (HasCallStack, IsLocality loc1, IsLocality loc2) =>
+nodeOpToFun1Typed :: forall a1 a2 loc1 loc2. (IsLocality loc2) =>
   SQLType a2 -> NodeOp -> ComputeNode loc1 a1 -> ComputeNode loc2 a2
 nodeOpToFun1Typed sqlt no node =
   let n2 = _emptyNode no sqlt :: ComputeNode loc2 a2
   in n2 `parents` [untyped node]
 
 -- | (internal) conversion
-nodeOpToFun1Untyped :: forall loc1 loc2. (HasCallStack, IsLocality loc1, IsLocality loc2) =>
+nodeOpToFun1Untyped :: forall loc1 loc2. (IsLocality loc2) =>
   DataType -> NodeOp -> ComputeNode loc1 Cell -> ComputeNode loc2 Cell
 nodeOpToFun1Untyped dt no node =
   let n2 = _emptyNode no (SQLType dt) :: ComputeNode loc2 Cell
   in n2 `parents` [untyped node]
 
 -- | (internal) conversion
-nodeOpToFun2 :: forall a a1 a2 loc loc1 loc2. (SQLTypeable a, IsLocality loc, IsLocality loc1, IsLocality loc2) =>
+nodeOpToFun2 :: forall a a1 a2 loc loc1 loc2. (SQLTypeable a, IsLocality loc) =>
   NodeOp -> ComputeNode loc1 a1 -> ComputeNode loc2 a2 -> ComputeNode loc a
 nodeOpToFun2 = nodeOpToFun2Typed (buildType :: SQLType a)
 
 -- | (internal) conversion
-nodeOpToFun2Typed :: forall a a1 a2 loc loc1 loc2. (IsLocality loc, IsLocality loc1, IsLocality loc2) =>
+nodeOpToFun2Typed :: forall a a1 a2 loc loc1 loc2. (IsLocality loc) =>
   SQLType a -> NodeOp -> ComputeNode loc1 a1 -> ComputeNode loc2 a2 -> ComputeNode loc a
 nodeOpToFun2Typed sqlt no node1 node2 =
   let n2 = _emptyNode no sqlt :: ComputeNode loc a
@@ -415,7 +414,7 @@ instance forall loc. A.ToJSON (TypedLocality loc) where
 -- This is useful for internal code that knows whether
 -- this operation is legal or not through some other means.
 -- This may still throw an error if the cast is illegal.
-_unsafeCastNode :: CheckedLocalityCast loc2 => ComputeNode loc1 a -> ComputeNode loc2 b
+_unsafeCastNode :: ComputeNode loc1 a -> ComputeNode loc2 b
 _unsafeCastNode x = x {
     _cnType = _cnType x,
     _cnLocality = _cnLocality x

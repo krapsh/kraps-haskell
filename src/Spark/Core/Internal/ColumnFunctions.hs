@@ -179,12 +179,6 @@ instance Projection DynColumn DynamicColProjection DynColumn where
 instance forall a to. Projection DynColumn (StaticColProjection a to) DynColumn where
   _performProjection dc proj = _projectDynCol dc (_colStaticProjToDynProj proj)
 
-class StringStuff a where
-  stuffAsString :: a -> String
-
-instance StringStuff String where
-  stuffAsString = undefined
-
 -- dyncolumn -> string -> dyncolumn
 instance Projection DynColumn String DynColumn where
   _performProjection dc s = _performProjection dc (_strToDynProj s)

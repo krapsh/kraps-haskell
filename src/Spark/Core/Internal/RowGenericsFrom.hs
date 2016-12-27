@@ -102,10 +102,10 @@ _m1 _ (D2Normal cell) =
     let xt = _gFcell (D2Normal cell) in
       M1 <$> xt
 
-instance (GFromSQL a, Constructor c) => GFromSQL (M1 C c a) where
+instance (GFromSQL a) => GFromSQL (M1 C c a) where
   _gFcell = _m1 "GFromSQL (M1 C c a)"
 
-instance (GFromSQL a, Selector c) => GFromSQL (M1 S c a) where
+instance (GFromSQL a) => GFromSQL (M1 S c a) where
   _gFcell (D2Normal (RowArray arr)) | V.length arr == 1 =
     M1 <$> _gFcell (D2Cons [cell]) where
       cell = V.head arr
