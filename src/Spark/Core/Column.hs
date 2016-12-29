@@ -12,6 +12,7 @@ module Spark.Core.Column(
   DynColumn,
   -- * Extractions and collations
   asCol,
+  asCol',
   pack1,
   pack,
   pack',

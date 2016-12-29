@@ -137,7 +137,7 @@ _extractionType = arrayType . SQLType . unSQLType
 -- Like the type, remove the row wrapper in the case of basic elements
 -- TODO(kps) figure out what the exact semantics are.
 -- It seems collect is behaving differently than the other nodes.
-_postprocessBasic :: (HasCallStack) => Cell -> Cell
+_postprocessBasic :: Cell -> Cell
 _postprocessBasic (RowArray rows) =
   RowArray (process <$> rows)  where
     process (RowArray arr) = case V.toList arr of

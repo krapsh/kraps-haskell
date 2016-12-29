@@ -34,6 +34,7 @@ library
                        Spark.Core.Internal.DAGStructures,
                        Spark.Core.Internal.DatasetFunctions,
                        Spark.Core.Internal.DatasetStructures,
+                       Spark.Core.Internal.Joins,
                        Spark.Core.Internal.LocalDataFunctions,
                        Spark.Core.Internal.OpFunctions,
                        Spark.Core.Internal.OpStructures,
@@ -131,6 +132,7 @@ test-suite krapsh-test-integration
   other-modules:       Spark.Core.CachingSpec,
                        Spark.Core.CollectSpec,
                        Spark.Core.IntegrationUtilities,
+                       Spark.Core.JoinsSpec,
                        Spark.Core.SimpleAddSpec
   build-depends:       aeson
                      , base

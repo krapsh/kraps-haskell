@@ -14,11 +14,14 @@ module Spark.Core.Internal.FunctionsInternals(
   NameTuple(..),
   TupleEquivalence(..),
   asCol,
+  asCol',
   pack1,
   pack,
   pack',
   struct',
   struct,
+  -- Developer tools
+  checkOrigin
 ) where
 
 import Control.Arrow
@@ -99,6 +102,9 @@ asCol ds =
   -- The empty path indicates that we are wrapping the whole thing.
   iEmptyCol ds (unsafeCastType $ nodeType ds) (FieldPath V.empty)
 
+asCol' :: DataFrame -> DynColumn
+asCol' = ((iUntypedColData . asCol) <$>)
+
 -- | Packs a single column into a dataframe.
 pack1 :: Column ref a -> Dataset a
 pack1 c =
@@ -144,6 +150,17 @@ of the structure.
 -}
 struct :: forall ref a b. (StaticColPackable2 ref a b) => a -> Column ref b
 struct = _staticPackAsColumn2
+
+
+checkOrigin :: [DynColumn] -> Try [UntypedColumnData]
+checkOrigin x = _checkOrigin =<< sequence x
+
+_checkOrigin :: [UntypedColumnData] -> Try [UntypedColumnData]
+_checkOrigin [] = pure []
+_checkOrigin l =
+  case _columnOrigin l of
+    [_] -> pure l
+    l' -> tryError $ sformat ("Too many distinct origins: "%sh) l'
 
 
 instance forall x. (DynColPackable x) => DynColPackable [x] where

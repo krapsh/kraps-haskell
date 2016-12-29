@@ -5,12 +5,15 @@ module Spark.Core.Functions(
   dataframe,
   constant,
   collect,
+  collect',
   count,
   identity,
   autocache,
   cache,
   uncache,
-  (@@)
+  (@@),
+  joinInner,
+  joinInner'
   ) where
 
 
@@ -21,6 +24,7 @@ import Spark.Core.Dataset
 import Spark.Core.Types
 import Spark.Core.Row
 import Spark.Core.Internal.DatasetFunctions
+import Spark.Core.Internal.Joins
 import Spark.Core.Internal.Utilities
 import Spark.Core.Internal.LocalDataFunctions
 import Spark.Core.Internal.FunctionsInternals()

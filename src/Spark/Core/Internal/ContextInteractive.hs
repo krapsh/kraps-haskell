@@ -14,6 +14,7 @@ module Spark.Core.Internal.ContextInteractive(
   SparkInteractiveException,
   createSparkSessionDef,
   exec1Def,
+  exec1Def',
   closeSparkSessionDef
 ) where
 
@@ -30,8 +31,10 @@ import Control.Monad.Logger(runStdoutLoggingT)
 
 import Spark.Core.Internal.ContextStructures
 import Spark.Core.Internal.DatasetStructures
+import Spark.Core.Internal.DatasetFunctions(untypedLocalData)
 import Spark.Core.Internal.ContextIOInternal
-import Spark.Core.Internal.RowGenericsFrom(FromSQL)
+import Spark.Core.Internal.RowGenericsFrom(FromSQL, cellToValue)
+import Spark.Core.Internal.RowStructures(Cell)
 import Spark.Core.Internal.Utilities
 import Spark.Core.StructuresInternal
 import Spark.Core.Try
@@ -58,7 +61,7 @@ instance Exception SparkInteractiveException
 
 If a session already exists, an exception will be thrown.
  -}
-createSparkSessionDef :: (HasCallStack) => SparkSessionConf -> IO ()
+createSparkSessionDef :: SparkSessionConf -> IO ()
 createSparkSessionDef conf = do
   current <- _currentSession
   case current of
@@ -79,18 +82,29 @@ throws an exception if any error happens.
  -}
 exec1Def :: (FromSQL a, HasCallStack) => LocalData a -> IO a
 exec1Def ld = do
+  c <- exec1Def' (pure (untypedLocalData ld))
+  case cellToValue c of
+    Right x -> return x
+    Left txt -> _throw txt
+
+exec1Def' :: (HasCallStack) => LocalFrame -> IO Cell
+exec1Def' lf = do
   mCtx <- _currentSession
   case mCtx of
     Nothing ->
       _throw "No default context found. You must first create a default spark context with createSparkSessionDef"
-    Just ctx -> do
-      (res, newSt) <- (runStateT . runStdoutLoggingT . executeCommand1) ld ctx
-      _setSession newSt
-      case res of
-        Right x ->
-          return x
+    Just ctx ->
+      case lf of
         Left err ->
           throwM (SparkInteractiveException err)
+        Right ld -> do
+          (res, newSt) <- (runStateT . runStdoutLoggingT . executeCommand1') ld ctx
+          _setSession newSt
+          case res of
+            Right x ->
+              return x
+            Left err ->
+              throwM (SparkInteractiveException err)
 
 {-| Closes the default session. The default session is empty after this call
 completes.
@@ -98,24 +112,24 @@ completes.
 NOTE: This does not currently clear up the resources! It is a stub implementation
 used in testing.
 -}
-closeSparkSessionDef :: (HasCallStack) => IO ()
+closeSparkSessionDef :: IO ()
 closeSparkSessionDef = do
   _ <- _removeSession
   return ()
 
-_currentSession :: (HasCallStack) => IO (Maybe SparkSession)
+_currentSession :: IO (Maybe SparkSession)
 _currentSession = readIORef _globalSessionRef
 
-_setSession :: (HasCallStack) => SparkSession -> IO ()
+_setSession :: SparkSession -> IO ()
 _setSession st = writeIORef _globalSessionRef (Just st)
 
-_removeSession :: (HasCallStack) => IO (Maybe SparkSession)
+_removeSession :: IO (Maybe SparkSession)
 _removeSession = do
   current <- _currentSession
   _ <- writeIORef _globalSessionRef Nothing
   return current
 
-_throw :: (HasCallStack) => Text -> IO a
+_throw :: Text -> IO a
 _throw txt = throwM $
   SparkInteractiveException Error {
     ePath = NodePath V.empty,

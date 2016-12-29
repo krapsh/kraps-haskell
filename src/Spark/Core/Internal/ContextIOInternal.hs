@@ -6,7 +6,8 @@ module Spark.Core.Internal.ContextIOInternal(
   returnPure,
   createSparkSession,
   createSparkSession',
-  executeCommand1
+  executeCommand1,
+  executeCommand1'
 ) where
 
 import Control.Concurrent(threadDelay)
@@ -32,6 +33,8 @@ import Spark.Core.Dataset
 import Spark.Core.Internal.Client
 import Spark.Core.Internal.ContextInternal
 import Spark.Core.Internal.ContextStructures
+import Spark.Core.Internal.DatasetFunctions(untypedLocalData)
+import Spark.Core.Internal.DatasetStructures(UntypedLocalData)
 import Spark.Core.Row
 import Spark.Core.StructuresInternal
 import Spark.Core.Try
@@ -78,6 +81,11 @@ an exception may be thrown instead.
 executeCommand1 :: forall a. (FromSQL a, HasCallStack) =>
   LocalData a -> SparkState (Try a)
 executeCommand1 ld = do
+    tcell <- executeCommand1' (untypedLocalData ld)
+    return $ tcell >>= (tryEither . cellToValue)
+
+executeCommand1' :: (HasCallStack) => UntypedLocalData -> SparkState (Try Cell)
+executeCommand1' ld = do
     session <- get
     tcomp <- returnPure $ prepareExecution1 ld
     case tcomp of
@@ -94,8 +102,7 @@ executeCommand1 ld = do
         in do
           _ <- _sendComputation session comp
           nrs <- nodeResults
-          tcell <- returnPure $ storeResults comp nrs
-          return $ tcell >>= (tryEither . cellToValue)
+          returnPure $ storeResults comp nrs
 
 _randomSessionName :: IO Text
 _randomSessionName = do

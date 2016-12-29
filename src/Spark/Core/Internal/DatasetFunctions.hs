@@ -35,6 +35,7 @@ module Spark.Core.Internal.DatasetFunctions(
   nodeParents,
   nodeType,
   untypedDataset,
+  untypedLocalData,
   updateNode,
   -- Developer conversions
   fun1ToOpTyped,
@@ -44,6 +45,7 @@ module Spark.Core.Internal.DatasetFunctions(
   nodeOpToFun1Untyped,
   nodeOpToFun2,
   nodeOpToFun2Typed,
+  unsafeCastDataset,
   -- Internal
   opnameCache,
   opnameUnpersist,
@@ -228,6 +230,10 @@ untyped = _unsafeCastNode
 untypedDataset :: ComputeNode LocDistributed a -> UntypedDataset
 untypedDataset = _unsafeCastNode
 
+{-| Removes type informatino from an observable. -}
+untypedLocalData :: ComputeNode LocLocal a -> UntypedLocalData
+untypedLocalData = _unsafeCastNode
+
 {-| Adds parents to the node.
 It is assumed the parents are the unique set of nodes required
 by the operation defined in this node.
@@ -409,6 +415,9 @@ instance forall loc a. A.ToJSON (ComputeNode loc a) where
 instance forall loc. A.ToJSON (TypedLocality loc) where
   toJSON (TypedLocality Local) = A.String "local"
   toJSON (TypedLocality Distributed) = A.String "distributed"
+
+unsafeCastDataset :: ComputeNode LocDistributed a -> ComputeNode LocDistributed b
+unsafeCastDataset ds = ds { _cnType = _cnType ds }
 
 -- Performs an unsafe type recast.
 -- This is useful for internal code that knows whether

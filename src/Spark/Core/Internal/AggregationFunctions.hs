@@ -18,7 +18,7 @@ import Spark.Core.Internal.RowGenerics(ToSQL)
 import Spark.Core.Internal.LocalDataFunctions()
 import Spark.Core.Internal.FunctionsInternals
 import Spark.Core.Internal.OpStructures
-import Spark.Core.Internal.Utilities(failure, HasCallStack)
+import Spark.Core.Internal.Utilities(failure, HasCallStack, missing)
 import Spark.Core.Internal.TypesStructures
 import Spark.Core.Types
 
@@ -49,6 +49,9 @@ the returned data.
 collect :: forall ref a. (SQLTypeable a) => Column ref a -> LocalData [a]
 collect = applyUniAgg (_collectAgg :: UniversalAggregator a [a])
 
+collect' :: DynColumn -> LocalFrame
+collect' = missing "collect'"
+
 {-|
 This is the universal aggregator: the invariant aggregator and
 some extra laws to combine multiple outputs.
@@ -61,6 +64,11 @@ data UniversalAggregator a buff = UniversalAggregator {
   -- This operation is associative and commutative
   -- The logical parents of the final observable have to be the 2 inputs
   uaMergeBuffer :: LocalData buff -> LocalData buff -> LocalData buff
+}
+
+data UntypedUniversalAggregator = UntypedUniversalAggregator {
+  uuaInitialOuter :: UntypedDataset -> LocalFrame,
+  uuaMergeBuffer :: UntypedLocalData -> UntypedLocalData -> LocalFrame
 }
 
 -- | (internal)

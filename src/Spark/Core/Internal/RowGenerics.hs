@@ -53,6 +53,9 @@ instance ToSQL a => ToSQL (Maybe a) where
   _valueToCell (Just x) = _valueToCell x
   _valueToCell Nothing = Empty
 
+instance (ToSQL a, ToSQL b) => ToSQL (a, b) where
+  _valueToCell (x, y) = RowArray (V.fromList [valueToCell x, valueToCell y])
+
 instance ToSQL Int where
   _valueToCell = IntElement
 
