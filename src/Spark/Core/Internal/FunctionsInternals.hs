@@ -27,7 +27,6 @@ module Spark.Core.Internal.FunctionsInternals(
 import Control.Arrow
 import qualified Data.Vector as V
 import qualified Data.Text as T
-import Data.List(sort, nub)
 import Formatting
 
 import Spark.Core.Internal.ColumnStructures
@@ -223,27 +222,19 @@ _unsafeBuildStruct cols (NameTuple names) =
 
 
 _buildStruct :: [(FieldName, UntypedColumnData)] -> Try UntypedColumnData
-_buildStruct [] = tryError "You cannot build an empty structure"
-_buildStruct ((hfn, hcol):t) =
-  let cols = ((hfn, hcol):t)
-      cols' = V.fromList cols
-      fields = ColStruct $ (uncurry TransformField .(fst &&& colOp . snd)) <$> cols'
-      ct = StructType $ (uncurry StructField . (fst &&& unSQLType . colType . snd)) <$> cols'
-      name = "struct(" <> T.intercalate "," (unFieldName . fst <$> cols) <> ")"
-      names = fst <$> cols
-      numNames = length names
-      numDistincts = length . nub $ names
-      origins = _columnOrigin (snd <$> cols)
-  in case (origins, numNames == numDistincts) of
-    ([_], True) ->
-        pure ColumnData {
-                    _cOrigin = _cOrigin hcol,
-                    _cType = StrictType $ Struct ct,
-                    _cOp = fields,
-                    _cReferingPath = Just $ unsafeFieldName name
-                  }
-    (l, True) -> tryError $ sformat ("Too many distinct origins: "%sh) l
-    (_, False) -> tryError $ sformat ("Duplicate field names when building the struct: "%sh) (sort names)
+_buildStruct cols = do
+  let fields = ColStruct $ (uncurry TransformField . (fst &&& colOp . snd)) <$> V.fromList cols
+  st <- structTypeFromFields $ (fst &&& unSQLType . colType . snd) <$> cols
+  let name = structName st
+  case _columnOrigin (snd <$> cols) of
+    [ds] ->
+      pure ColumnData {
+                  _cOrigin = ds,
+                  _cType = StrictType (Struct st),
+                  _cOp = fields,
+                  _cReferingPath = Just $ unsafeFieldName name
+                }
+    l -> tryError $ sformat ("Too many distinct origins: "%sh) l
 
 _columnOrigin :: [UntypedColumnData] -> [UntypedDataset]
 _columnOrigin l =

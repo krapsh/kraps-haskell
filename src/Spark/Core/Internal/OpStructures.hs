@@ -145,7 +145,8 @@ data NodeOp =
     -- | Some aggregator that does not respect any particular invariant.
   | NodeOpaqueAggregator StandardOperator
     -- | A universal aggregator.
-  | NodeUniversalAggregator UniversalAggregatorOp
+  | NodeAggregatorReduction UniversalAggregatorOp
+  | NodeAggregatorLocalReduction UniversalAggregatorOp
     -- | A structured transform, performed either on a local node or a
     -- distributed node.
   | NodeStructuredTransform !ColOp

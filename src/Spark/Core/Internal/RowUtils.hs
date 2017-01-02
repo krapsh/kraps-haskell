@@ -3,6 +3,7 @@
 module Spark.Core.Internal.RowUtils(
   jsonToCell,
   checkCell,
+  rowArray
 ) where
 
 import Data.Aeson
@@ -20,6 +21,7 @@ import Spark.Core.Internal.RowStructures
 import Spark.Core.StructuresInternal(FieldName(..))
 import Spark.Core.Internal.Utilities
 
+type TryCell = Either Text Cell
 
 -- | Decodes a JSON into a row.
 -- This operation requires a SQL type that describes
@@ -34,8 +36,11 @@ checkCell dt c = case _checkCell dt c of
   Nothing -> pure c
   Just txt -> throwError txt
 
+{-| Convenience constructor for an array of cells.
+-}
+rowArray :: [Cell] -> Cell
+rowArray = RowArray . V.fromList
 
-type TryCell = Either Text Cell
 
 -- Returns an error message if something wrong is found
 _checkCell :: DataType -> Cell -> Maybe Text

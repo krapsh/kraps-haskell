@@ -13,14 +13,18 @@ import Formatting
 
 import Spark.Core.Internal.DatasetStructures
 import Spark.Core.Internal.ColumnStructures
+import Spark.Core.Internal.ColumnFunctions(colType, untypedCol)
 import Spark.Core.Internal.DatasetFunctions
 import Spark.Core.Internal.RowGenerics(ToSQL)
 import Spark.Core.Internal.LocalDataFunctions()
 import Spark.Core.Internal.FunctionsInternals
 import Spark.Core.Internal.OpStructures
-import Spark.Core.Internal.Utilities(failure, HasCallStack, missing)
 import Spark.Core.Internal.TypesStructures
+import Spark.Core.Internal.Utilities
+import Spark.Core.Internal.TypesFunctions(arrayType')
+import Spark.Core.Internal.RowStructures(Cell)
 import Spark.Core.Types
+import Spark.Core.Try
 
 {-| The sum of all the elements in a column.
 
@@ -47,10 +51,11 @@ This is a departure from Spark, which does not guarantee an ordering on
 the returned data.
 -}
 collect :: forall ref a. (SQLTypeable a) => Column ref a -> LocalData [a]
-collect = applyUniAgg (_collectAgg :: UniversalAggregator a [a])
+collect = applyUniAgg2 _collectAgg'
 
+{-| See the documentation of collect. -}
 collect' :: DynColumn -> LocalFrame
-collect' = missing "collect'"
+collect' = applyUntypedUniAgg _collectAgg'
 
 {-|
 This is the universal aggregator: the invariant aggregator and
@@ -66,9 +71,24 @@ data UniversalAggregator a buff = UniversalAggregator {
   uaMergeBuffer :: LocalData buff -> LocalData buff -> LocalData buff
 }
 
+{-| The untyped version of the universal aggregator.
+
+Note this is a bit more general than the aggregator: it allows a different type
+in the input, which is useful for complex reductions such as sketches, etc.
+
+This essentially defines a semi-group. One can show that because of the special
+structure required by the initial outer, this semigroup has a neutral element
+and hence is a monoid.
+-}
 data UntypedUniversalAggregator = UntypedUniversalAggregator {
+  -- The type of the semigroup, after merge.
+  uuaMergeType :: DataType,
+  -- The projection from the set of dataset to the semigroup.
+  -- It has to be an homomorphism with respect to the union of datasets.
   uuaInitialOuter :: UntypedDataset -> LocalFrame,
-  uuaMergeBuffer :: UntypedLocalData -> UntypedLocalData -> LocalFrame
+  -- The semigroup law.
+  -- Both elements are assumed to be of datatype given by the merge type.
+  uuaMergeBuffer :: UntypedLocalData -> UntypedLocalData -> UntypedLocalData
 }
 
 -- | (internal)
@@ -104,6 +124,19 @@ applyUniAgg ua c =
     -- ld = emptyLocalData (NodeUniversalAggregator aggop) (nodeType ld1)
   in ld1
 
+applyUniAgg2 :: (SQLTypeable a, SQLTypeable b) => (DataType -> UntypedUniversalAggregator) -> Column ref a -> LocalData b
+applyUniAgg2 f c =
+  let ld = applyUntypedUniAgg f (untypedCol c)
+      ld' = asObservable ld
+  in forceRight ld'
+
+applyUntypedUniAgg :: (DataType -> UntypedUniversalAggregator) -> DynColumn -> LocalFrame
+applyUntypedUniAgg f dc = do
+  c <- dc
+  let uua = f . unSQLType . colType $ c
+  let ds = pack1 c
+  let res = uuaInitialOuter uua ds
+  res
 
 -- (internal)
 simpleOp1Typed :: (IsLocality locb) =>
@@ -118,6 +151,34 @@ simpleOp1Typed sqltb name =
            }
       no = NodeLocalOp so
   in nodeOpToFun1Typed sqltb no
+
+-- (internal)
+simpleOp1Local' ::
+  DataType ->
+  T.Text ->
+  ComputeNode loc Cell -> UntypedLocalData
+simpleOp1Local' dt name =
+  let so = StandardOperator {
+             soName = name,
+             soOutputType = dt,
+             soExtra = Null
+           }
+      no = NodeLocalOp so
+  in nodeOpToFun1Untyped dt no
+
+-- (internal)
+simpleOp2Local' ::
+  DataType ->
+  T.Text ->
+  ComputeNode loc1 Cell -> ComputeNode loc2 Cell -> UntypedLocalData
+simpleOp2Local' dt name =
+  let so = StandardOperator {
+             soName = name,
+             soOutputType = dt,
+             soExtra = Null
+           }
+      no = NodeLocalOp so
+  in nodeOpToFun2Untyped dt no
 
 -- (internal)
 simpleOp1 :: forall a b loca locb. (IsLocality locb, SQLTypeable b) =>
@@ -169,3 +230,18 @@ _collectAgg =
     uaInitialOuter = simpleOp1 "org.spark.Collect",
     uaMergeBuffer = simpleOp2 "org.spark.CatSorted"
   }
+
+_guardType :: DataType -> (UntypedDataset -> UntypedLocalData) -> (UntypedDataset -> LocalFrame)
+_guardType dt f ds =
+  if unSQLType (nodeType ds) == dt
+  then
+    pure $ f ds
+  else
+    tryError $ sformat ("Expected type "%sh%" but got type "%sh) dt (nodeType ds)
+
+_collectAgg' :: DataType -> UntypedUniversalAggregator
+_collectAgg' dt =
+  let ldt = arrayType' dt
+      f1 = _guardType dt (simpleOp1Local' ldt "org.spark.Collect")
+      f2 = simpleOp2Local' ldt "org.spark.CatSorted"
+  in UntypedUniversalAggregator ldt f1 f2

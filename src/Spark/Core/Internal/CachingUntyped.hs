@@ -24,7 +24,8 @@ import Spark.Core.StructuresInternal
 cachingType :: UntypedNode -> CacheTry NodeCachingType
 cachingType n = traceHint ("cachingType: n="<>show' (nodeOp n)<>" res=") $ case nodeOp n of
   NodeLocalOp _ -> pure Stop
-  NodeUniversalAggregator _ -> pure Stop
+  NodeAggregatorReduction _ -> pure Stop
+  NodeAggregatorLocalReduction _ -> pure Stop
   NodeOpaqueAggregator _ -> pure Stop
   NodeLocalLit _ _ -> pure Stop
   NodeStructuredTransform _ -> pure Through

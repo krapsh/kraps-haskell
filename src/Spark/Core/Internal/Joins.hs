@@ -10,6 +10,7 @@ module Spark.Core.Internal.Joins(
 
 import qualified Data.Aeson as A
 import qualified Data.Vector as V
+import Control.Arrow
 
 import Spark.Core.Internal.ColumnStructures
 import Spark.Core.Internal.ColumnFunctions
@@ -19,6 +20,7 @@ import Spark.Core.Internal.FunctionsInternals
 import Spark.Core.Internal.OpStructures
 import Spark.Core.Internal.TypesStructures
 import Spark.Core.Internal.Utilities
+import Spark.Core.Internal.TypesFunctions(structTypeFromFields)
 import Spark.Core.Try
 
 {-| Standard (inner) join on two sets of data.
@@ -37,6 +39,8 @@ joinInner :: Column ref1 key -> Column ref1 value1 -> Column ref2 key -> Column 
 joinInner key1 val1 key2 val2 = unsafeCastDataset (forceRight df) where
   df = joinInner' (untypedCol key1) (untypedCol val1) (untypedCol key2) (untypedCol val2)
 
+{-| Untyped version of the inner join.
+-}
 joinInner' :: DynColumn -> DynColumn -> DynColumn -> DynColumn -> DataFrame
 joinInner' key1 val1 key2 val2 = do
   df1 <- pack' (struct' [key1, val1])
@@ -48,4 +52,7 @@ joinInner' key1 val1 key2 val2 = do
   return $ updateNode ds f
 
 _joinTypeInner :: DynColumn -> DynColumn -> DynColumn -> Try DataType
-_joinTypeInner kcol col1 col2 = (unSQLType . colType) <$> struct' [kcol, col1, col2]
+_joinTypeInner kcol col1 col2 = do
+  cs <- sequence [kcol, col1, col2]
+  st <- structTypeFromFields $ (colFieldName &&& unSQLType . colType) <$> cs
+  return $ StrictType (Struct st)

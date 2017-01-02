@@ -30,7 +30,8 @@ simpleShowOp (NodeLocalOp op) = soName op
 simpleShowOp (NodeDistributedOp op) = soName op
 simpleShowOp (NodeLocalLit _ _) = T.pack "org.spark.LocalConstant"
 simpleShowOp (NodeOpaqueAggregator op) = soName op
-simpleShowOp (NodeUniversalAggregator ua) = soName . uaoMergeBuffer $ ua
+simpleShowOp (NodeAggregatorReduction ua) = soName . uaoInitialOuter $ ua
+simpleShowOp (NodeAggregatorLocalReduction ua) = soName . uaoMergeBuffer $ ua
 simpleShowOp (NodeStructuredTransform _) = T.pack "org.spark.Select"
 simpleShowOp (NodeDistributedLit _ _) = T.pack "org.spark.Constant"
 
@@ -59,6 +60,7 @@ extraNodeOpData (NodeDistributedLit dt lst) =
   -- as a SQL datatype.
   A.object [ "cellType" .= toJSON dt,
              "content" .= toJSON lst]
+extraNodeOpData (NodeDistributedOp so) = soExtra so
 extraNodeOpData _ = A.Null
 
 -- Adds the content of a node op to a hash.
