@@ -1,5 +1,5 @@
 name:                krapsh
-version:             0.1.6.2
+version:             0.1.7.0
 synopsis:            Haskell bindings for Spark Dataframes and Datasets
 description:         Krapsh is an exploration vehicle for developing safe,
                      robust and reliable data pipelines over Apache Spark, using
