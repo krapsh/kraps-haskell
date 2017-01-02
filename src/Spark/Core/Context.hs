@@ -18,9 +18,12 @@ module Spark.Core.Context(
   FromSQL,
   defaultConf,
   executeCommand1,
+  executeCommand1',
   createSparkSessionDef,
   closeSparkSessionDef,
-  exec1Def) where
+  exec1Def,
+  exec1Def'
+  ) where
 
 import Data.Text(pack)
 

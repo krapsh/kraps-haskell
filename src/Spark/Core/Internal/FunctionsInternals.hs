@@ -14,17 +14,19 @@ module Spark.Core.Internal.FunctionsInternals(
   NameTuple(..),
   TupleEquivalence(..),
   asCol,
+  asCol',
   pack1,
   pack,
   pack',
   struct',
   struct,
+  -- Developer tools
+  checkOrigin
 ) where
 
 import Control.Arrow
 import qualified Data.Vector as V
 import qualified Data.Text as T
-import Data.List(sort, nub)
 import Formatting
 
 import Spark.Core.Internal.ColumnStructures
@@ -99,6 +101,9 @@ asCol ds =
   -- The empty path indicates that we are wrapping the whole thing.
   iEmptyCol ds (unsafeCastType $ nodeType ds) (FieldPath V.empty)
 
+asCol' :: DataFrame -> DynColumn
+asCol' = ((iUntypedColData . asCol) <$>)
+
 -- | Packs a single column into a dataframe.
 pack1 :: Column ref a -> Dataset a
 pack1 c =
@@ -144,6 +149,17 @@ of the structure.
 -}
 struct :: forall ref a b. (StaticColPackable2 ref a b) => a -> Column ref b
 struct = _staticPackAsColumn2
+
+
+checkOrigin :: [DynColumn] -> Try [UntypedColumnData]
+checkOrigin x = _checkOrigin =<< sequence x
+
+_checkOrigin :: [UntypedColumnData] -> Try [UntypedColumnData]
+_checkOrigin [] = pure []
+_checkOrigin l =
+  case _columnOrigin l of
+    [_] -> pure l
+    l' -> tryError $ sformat ("Too many distinct origins: "%sh) l'
 
 
 instance forall x. (DynColPackable x) => DynColPackable [x] where
@@ -206,27 +222,19 @@ _unsafeBuildStruct cols (NameTuple names) =
 
 
 _buildStruct :: [(FieldName, UntypedColumnData)] -> Try UntypedColumnData
-_buildStruct [] = tryError "You cannot build an empty structure"
-_buildStruct ((hfn, hcol):t) =
-  let cols = ((hfn, hcol):t)
-      cols' = V.fromList cols
-      fields = ColStruct $ (uncurry TransformField .(fst &&& colOp . snd)) <$> cols'
-      ct = StructType $ (uncurry StructField . (fst &&& unSQLType . colType . snd)) <$> cols'
-      name = "struct(" <> T.intercalate "," (unFieldName . fst <$> cols) <> ")"
-      names = fst <$> cols
-      numNames = length names
-      numDistincts = length . nub $ names
-      origins = _columnOrigin (snd <$> cols)
-  in case (origins, numNames == numDistincts) of
-    ([_], True) ->
-        pure ColumnData {
-                    _cOrigin = _cOrigin hcol,
-                    _cType = StrictType $ Struct ct,
-                    _cOp = fields,
-                    _cReferingPath = Just $ unsafeFieldName name
-                  }
-    (l, True) -> tryError $ sformat ("Too many distinct origins: "%sh) l
-    (_, False) -> tryError $ sformat ("Duplicate field names when building the struct: "%sh) (sort names)
+_buildStruct cols = do
+  let fields = ColStruct $ (uncurry TransformField . (fst &&& colOp . snd)) <$> V.fromList cols
+  st <- structTypeFromFields $ (fst &&& unSQLType . colType . snd) <$> cols
+  let name = structName st
+  case _columnOrigin (snd <$> cols) of
+    [ds] ->
+      pure ColumnData {
+                  _cOrigin = ds,
+                  _cType = StrictType (Struct st),
+                  _cOp = fields,
+                  _cReferingPath = Just $ unsafeFieldName name
+                }
+    l -> tryError $ sformat ("Too many distinct origins: "%sh) l
 
 _columnOrigin :: [UntypedColumnData] -> [UntypedDataset]
 _columnOrigin l =

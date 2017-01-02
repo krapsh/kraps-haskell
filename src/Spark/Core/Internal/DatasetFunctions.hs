@@ -14,6 +14,7 @@ module Spark.Core.Internal.DatasetFunctions(
   asDF,
   asDS,
   asLocalObservable,
+  asObservable,
   -- Standard functions
   identity,
   autocache,
@@ -35,6 +36,7 @@ module Spark.Core.Internal.DatasetFunctions(
   nodeParents,
   nodeType,
   untypedDataset,
+  untypedLocalData,
   updateNode,
   -- Developer conversions
   fun1ToOpTyped,
@@ -44,6 +46,8 @@ module Spark.Core.Internal.DatasetFunctions(
   nodeOpToFun1Untyped,
   nodeOpToFun2,
   nodeOpToFun2Typed,
+  nodeOpToFun2Untyped,
+  unsafeCastDataset,
   -- Internal
   opnameCache,
   opnameUnpersist,
@@ -207,13 +211,7 @@ asDF = pure . _unsafeCastNode
 -- operation is not correct.
 -- This operation assumes that both field names and types are correct.
 asDS :: forall a. (SQLTypeable a) => DataFrame -> Try (Dataset a)
-asDS df = do
-  n <- df
-  let dt = unSQLType (buildType :: SQLType a)
-  let dt' = unSQLType (nodeType n)
-  if dt == dt'
-    then pure (_unsafeCastNode n)
-    else tryError $ sformat ("Casting error: dataframe has type "%sh%" incompatible with type "%sh) dt' dt
+asDS = _asTyped
 
 
 -- | Converts a local node to a local frame.
@@ -221,12 +219,19 @@ asDS df = do
 asLocalObservable :: ComputeNode LocLocal a -> LocalFrame
 asLocalObservable = pure . _unsafeCastNode
 
+asObservable :: forall a. (SQLTypeable a) => LocalFrame -> Try (LocalData a)
+asObservable = _asTyped
+
 -- | Converts any node to an untyped node
 untyped :: ComputeNode loc a -> UntypedNode
 untyped = _unsafeCastNode
 
 untypedDataset :: ComputeNode LocDistributed a -> UntypedDataset
 untypedDataset = _unsafeCastNode
+
+{-| Removes type informatino from an observable. -}
+untypedLocalData :: ComputeNode LocLocal a -> UntypedLocalData
+untypedLocalData = _unsafeCastNode
 
 {-| Adds parents to the node.
 It is assumed the parents are the unique set of nodes required
@@ -381,6 +386,14 @@ nodeOpToFun2Typed sqlt no node1 node2 =
   let n2 = _emptyNode no sqlt :: ComputeNode loc a
   in n2 `parents` [untyped node1, untyped node2]
 
+-- | (internal) conversion
+nodeOpToFun2Untyped :: forall loc1 loc2 loc3. (IsLocality loc3) =>
+  DataType -> NodeOp -> ComputeNode loc1 Cell -> ComputeNode loc2 Cell -> ComputeNode loc3 Cell
+nodeOpToFun2Untyped dt no node1 node2 =
+  let n2 = _emptyNode no (SQLType dt) :: ComputeNode loc3 Cell
+  in n2 `parents` [untyped node1, untyped node2]
+
+
 -- ******* INSTANCES *********
 
 -- Put here because it depends on some private functions.
@@ -409,6 +422,19 @@ instance forall loc a. A.ToJSON (ComputeNode loc a) where
 instance forall loc. A.ToJSON (TypedLocality loc) where
   toJSON (TypedLocality Local) = A.String "local"
   toJSON (TypedLocality Distributed) = A.String "distributed"
+
+unsafeCastDataset :: ComputeNode LocDistributed a -> ComputeNode LocDistributed b
+unsafeCastDataset ds = ds { _cnType = _cnType ds }
+
+_asTyped :: forall loc a. (SQLTypeable a) => Try (ComputeNode loc Cell) -> Try (ComputeNode loc a)
+_asTyped df = do
+  n <- df
+  let dt = unSQLType (buildType :: SQLType a)
+  let dt' = unSQLType (nodeType n)
+  if dt == dt'
+    then pure (_unsafeCastNode n)
+    else tryError $ sformat ("Casting error: dataframe has type "%sh%" incompatible with type "%sh) dt' dt
+
 
 -- Performs an unsafe type recast.
 -- This is useful for internal code that knows whether

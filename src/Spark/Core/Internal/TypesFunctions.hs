@@ -13,15 +13,23 @@ module Spark.Core.Internal.TypesFunctions(
   canNull,
   structField,
   structType,
+  structTypeFromFields,
+  structName,
   iSingleField,
   -- cellType,
 ) where
 
-import Data.Text as T
+import qualified Data.Text as T
+import Data.List(sort, nub)
 import qualified Data.Vector as V
+import Data.Text(Text, intercalate)
+import Formatting
+
 
 import Spark.Core.Internal.TypesStructures
 import Spark.Core.StructuresInternal
+import Spark.Core.Internal.Utilities
+import Spark.Core.Try
 
 -- Performs a cast of the type.
 -- This may throw an error if the required type b is not
@@ -100,6 +108,25 @@ iSingleField (StrictType (Struct (StructType fields))) = case V.toList fields of
   [StructField _ dt] -> Just dt
   _ -> Nothing
 iSingleField _ = Nothing
+
+
+structName :: StructType -> Text
+structName (StructType fields) =
+  "struct(" <> intercalate "," (unFieldName . structFieldName <$> V.toList fields) <> ")"
+
+structTypeFromFields :: [(FieldName, DataType)] -> Try StructType
+structTypeFromFields [] = tryError "You cannot build an empty structure"
+structTypeFromFields ((hfn, hdt):t) =
+  let fs = (hfn, hdt) : t
+      ct = StructType $ uncurry StructField <$> V.fromList fs
+      names = fst <$> fs
+      numNames = length names
+      numDistincts = length . nub $ names
+  in if numNames == numDistincts
+    then return ct
+    else tryError $ sformat ("Duplicate field names when building the struct: "%sh) (sort names)
+
+
 
 
 _structFromUnfields :: [(T.Text, DataType)] -> StructType

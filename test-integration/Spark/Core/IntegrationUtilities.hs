@@ -36,7 +36,7 @@ data TestStruct4 = TestStruct4 {
 data TestStruct5 = TestStruct5 {
   ts5f1 :: Int,
   ts5f2 :: Int
-} deriving (Show, Eq, Generic)
+} deriving (Show, Eq, Generic, Ord)
 -- instance ToJSON TestStruct5
 instance SQLTypeable TestStruct5
 instance FromSQL TestStruct5

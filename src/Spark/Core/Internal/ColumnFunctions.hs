@@ -39,7 +39,6 @@ import Data.Maybe(fromMaybe)
 import Data.List(find)
 import Formatting
 
-
 import Spark.Core.Internal.ColumnStructures
 import Spark.Core.Internal.DatasetFunctions
 import Spark.Core.Internal.DatasetStructures
@@ -210,7 +209,7 @@ _unsafeCastColData c = c { _cType = _cType c }
 
 _checkedCastColData :: SQLType b -> ColumnData ref a -> Try (ColumnData ref b)
 _checkedCastColData sqlt cd =
-  if (unSQLType sqlt) == (unSQLType (colType cd))
+  if unSQLType sqlt == unSQLType (colType cd)
     then pure (_unsafeCastColData cd)
     else tryError $ sformat ("Cannot cast column "%sh%" to type "%sh) cd sqlt
 
@@ -377,13 +376,13 @@ instance CanRename DynColumn String where
 
 
 instance forall a. HomoBinaryOp2 a a a where
-  _liftFun f = BinaryOpFun id id f
+  _liftFun = BinaryOpFun id id
 
 instance forall ref a. HomoBinaryOp2 (Column ref a) DynColumn DynColumn where
-  _liftFun f = BinaryOpFun untypedCol id f
+  _liftFun = BinaryOpFun untypedCol id
 
 instance forall ref a. HomoBinaryOp2 DynColumn (Column ref a) DynColumn where
-  _liftFun f = BinaryOpFun id untypedCol f
+  _liftFun = BinaryOpFun id untypedCol
 
 
 instance (Num x) => Num (Column ref x) where

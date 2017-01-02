@@ -12,6 +12,7 @@ import Spark.Core.Types
 import Spark.Core.Row
 import Spark.Core.Functions
 import Spark.Core.Column
+import Spark.Core.IntegrationUtilities
 
 
 -- Collecting a dataset made from a list should yield the same list (modulo
@@ -39,18 +40,16 @@ spec = do
       collectIdempotent ([] :: [Int])
     run "ints1" $
       collectIdempotent ([4,5,1,2,3] :: [Int])
-    -- TODO(kps) in Spark 2.0.2, this fails!!!
-    -- Works with Spark 2.0.1 -> report
-    -- run "ints1_opt" $
-    --   collectIdempotent ([Just 1, Nothing] :: [Maybe Int])
-    -- run "nothing_ints_opt" $
-    --   collectIdempotent ([Nothing] :: [Maybe Int])
+    run "ints1_opt" $
+      collectIdempotent ([Just 1, Nothing] :: [Maybe Int])
+    run "nothing_ints_opt" $
+      collectIdempotent ([Nothing] :: [Maybe Int])
     run "ints1_opt" $
       collectIdempotent ([Just 1, Just 2] :: [Maybe Int])
     run "empty_ints_opt" $
       collectIdempotent ([] :: [Maybe Int])
-  -- describe "Integration test - collect on TestStruct5" $ do
-  --   run "empty_TestStruct5" $
-  --     collectIdempotent ([] :: [TestStruct5])
-  --   run "empty_TestStruct5" $
-  --     collectIdempotent ([TestStruct5 1 2] :: [TestStruct5])
+  describe "Integration test - collect on TestStruct5" $ do
+    run "empty_TestStruct5" $
+      collectIdempotent ([] :: [TestStruct5])
+    run "single_TestStruct5" $
+      collectIdempotent ([TestStruct5 1 2] :: [TestStruct5])
