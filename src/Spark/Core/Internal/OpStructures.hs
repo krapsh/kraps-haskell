@@ -11,6 +11,20 @@ import Data.Vector(Vector)
 import Spark.Core.StructuresInternal
 import Spark.Core.Internal.TypesStructures(DataType, SQLType, SQLType(unSQLType))
 
+{-| The name of a SQL function.
+
+It is one of the predefined SQL functions available in Spark.
+-}
+type SqlFunctionName = T.Text
+
+{-| The classpath of a UDAF.
+-}
+type UdafClassName = T.Text
+
+{-| The name of an operator defined in Kraps.
+-}
+type OperatorName = T.Text
+
 {-| The invariant respected by a transform.
 
 Depending on the value of the invariant, different optimizations
@@ -51,7 +65,7 @@ data Locality =
 -- | An operator defined by default in the release of Krapsh.
 -- All other physical operators can be converted to a standard operators.
 data StandardOperator = StandardOperator {
-  soName :: !T.Text,
+  soName :: !OperatorName,
   soOutputType :: !DataType,
   soExtra :: !Value
 } deriving (Eq, Show)
@@ -76,7 +90,7 @@ data ColOp =
     -- In this case, the other columns may matter
     -- TODO(kps) add if this function is partition invariant.
     -- It should be the case most of the time.
-  | ColFunction !T.Text !(Vector ColOp)
+  | ColFunction !SqlFunctionName !(Vector ColOp)
     -- | A constant defined for each element.
     -- The type should be the same as for the column
     -- A literal is always direct
@@ -97,6 +111,58 @@ data StructuredTransform =
   | InnerStruct !(Vector TransformField)
   deriving (Eq, Show)
 
+{-| When applying a UDAF, determines if it should only perform the algebraic
+portion of the UDAF (initialize+update+merge), or if it also performs the final,
+non-algebraic step.
+-}
+data UdafApplication = Algebraic | Complete deriving (Eq, Show)
+
+data AggOp =
+    -- The name of the UDAF and the field path to apply it onto.
+    AggUdaf !UdafApplication !UdafClassName !FieldPath
+    -- A column function that can be applied (sum, max, etc.)
+  | AggFunction !SqlFunctionName !(Vector FieldPath)
+  | AggStruct !(Vector AggField)
+  deriving (Eq, Show)
+
+{-| A field in the resulting aggregation transform.
+-}
+data AggField = AggField {
+  afName :: !FieldName,
+  afValue :: !AggOp
+} deriving (Eq, Show)
+
+{-| Unlike the structured transforms, the aggregation transforms do not allow
+nesting of elements.
+
+This is not a limitation in practice, as a nesting can be appended after an
+aggregation transform.
+-}
+data AggTransform =
+    OpaqueAggTransform !StandardOperator
+  | InnerAggOp !AggOp
+  | InnerAggStruct !(Vector AggField) deriving (Eq, Show)
+
+{-| The representation of a semi-group law in Spark.
+
+This is the basic law used in universal aggregators. It is a function on
+observables that must respect the following laws:
+
+f :: X -> X -> X
+commutative
+associative
+
+A neutral element is not required for the semi-group laws. However, if used in
+the context of a universal aggregator, such an element implicitly exists and
+corresponds to the empty dataset.
+-}
+data SemiGroupOperator =
+    -- | A standard operator that happens to respect the semi-group laws.
+    OpaqueSemiGroupLaw !StandardOperator
+    -- | The merging portion of a UDAF
+  | UdafSemiGroupOperator !UdafClassName
+    -- | A SQL operator that happens to respect the semi-group laws.
+  | ColumnSemiGroupLaw !SqlFunctionName deriving (Eq, Show)
 
 -- ********* DATASET OPERATORS ************
 -- These describe Dataset -> Dataset transforms.
@@ -119,9 +185,24 @@ data DatasetTransformDesc =
 -- Dataset -> Local data transform
 data UniversalAggregatorOp = UniversalAggregatorOp {
   uaoMergeType :: !DataType,
-  uaoInitialOuter :: !StandardOperator,
-  uaoMergeBuffer :: !StandardOperator
+  uaoInitialOuter :: !AggTransform,
+  uaoMergeBuffer :: !SemiGroupOperator
 } deriving (Eq, Show)
+
+
+data NodeOp2 =
+  -- empty -> local
+    NodeLocalLiteral !DataType !Value
+  -- empty -> distributed
+  | NodeDistributedLiteral !DataType !(Vector Value)
+  -- distributed -> local
+  | NodeStructuredAggregation !AggOp !(Maybe UniversalAggregatorOp)
+  -- distributed -> distributed or local -> local
+  | NodeStructuredTransform2 !Locality !ColOp
+  -- [distributed, local] -> [local, distributed] opaque
+  | NodeOpaqueTransform !Locality StandardOperator
+  deriving (Eq, Show)
+
 
 {-
 A node operation.

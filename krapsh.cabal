@@ -57,6 +57,7 @@ library
                        Spark.Core.Internal.Client,
                        Spark.Core.Internal.AggregationFunctions,
                        Spark.Core.Internal.FunctionsInternals,
+                       Spark.Core.Internal.Groups,
                        Spark.Core.Internal.LocatedBase,
                        Spark.Core.Internal.RowGenerics,
                        Spark.Core.Internal.RowGenericsFrom,
@@ -121,7 +122,7 @@ test-suite krapsh-test
                      , raw-strings-qq
                      , QuickCheck
                      , vector
-  ghc-options:         -fhpc -O0 -Wall -ddump-deriv
+  ghc-options:         -fhpc -O0 -Wall
 --  ghc-options:         -ddump-deriv -O0 -rtsopts=all -prof -auto-all
   default-language:    Haskell2010
 

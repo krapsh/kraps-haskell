@@ -10,7 +10,8 @@ module Spark.Core.ColumnFunctions(
   -- * Arithmetic operations
   (.+),
   -- * Reductions
-  colSum,
+  sumCol,
+  sumCol'
 ) where
 
 import Spark.Core.Internal.AlgebraStructures
