@@ -225,6 +225,9 @@ data NodeOp =
   | NodeLocalLit !DataType !Value
     -- | Some aggregator that does not respect any particular invariant.
   | NodeOpaqueAggregator StandardOperator
+  | NodeGroupedReduction !ColOp !AggOp
+  | NodeReduction !AggTransform
+    -- TODO: remove these
     -- | A universal aggregator.
   | NodeAggregatorReduction UniversalAggregatorOp
   | NodeAggregatorLocalReduction UniversalAggregatorOp

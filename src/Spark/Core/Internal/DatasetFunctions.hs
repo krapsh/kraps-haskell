@@ -48,6 +48,7 @@ module Spark.Core.Internal.DatasetFunctions(
   nodeOpToFun2Typed,
   nodeOpToFun2Untyped,
   unsafeCastDataset,
+  placeholder,
   -- Internal
   opnameCache,
   opnameUnpersist,
@@ -336,14 +337,19 @@ dataframe dt cells' = do
 -- | (internal)
 placeholderTyped :: forall a loc. (IsLocality loc) =>
   SQLType a -> ComputeNode loc a
-placeholderTyped tp =
+placeholderTyped tp = _unsafeCastNode n where
+  n = placeholder (unSQLType tp) :: ComputeNode loc Cell
+
+placeholder :: forall loc. (IsLocality loc) => DataType -> ComputeNode loc Cell
+placeholder tp =
   let
-    so = makeOperator "org.spark.Placeholder" tp
+    t = SQLType tp
+    so = makeOperator "org.spark.Placeholder" t
     (TypedLocality l) = _getTypedLocality :: TypedLocality loc
     op = case l of
       Local -> NodeLocalOp so
       Distributed -> NodeDistributedOp so
-  in  _emptyNode op tp
+  in  _emptyNode op t
 
 -- | (internal) conversion
 fun1ToOpTyped :: forall a loc a' loc'. (IsLocality loc) =>
