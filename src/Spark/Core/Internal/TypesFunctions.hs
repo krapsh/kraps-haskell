@@ -14,6 +14,7 @@ module Spark.Core.Internal.TypesFunctions(
   structField,
   structType,
   structTypeFromFields,
+  tupleType,
   structName,
   iSingleField,
   -- cellType,
@@ -74,6 +75,11 @@ colTypeFromFrame st @ (StructType fs) = case V.toList fs of
 
 
 -- The strict int type
+
+tupleType :: SQLType a -> SQLType b -> SQLType (a, b)
+tupleType (SQLType dt1) (SQLType dt2) =
+  SQLType $ structType [structField "_1" dt1, structField "_2" dt2]
+
 intType :: DataType
 intType = StrictType IntType
 

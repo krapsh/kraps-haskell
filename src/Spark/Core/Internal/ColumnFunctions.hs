@@ -21,10 +21,12 @@ module Spark.Core.Internal.ColumnFunctions(
   -- Developer API (projections)
   unsafeStaticProjection,
   dynamicProjection,
+  dropColReference,
   -- Public functions
   untypedCol,
   colFromObs,
   colFromObs',
+  castTypeCol,
   castCol,
   castCol',
   colRef
@@ -88,7 +90,7 @@ colType = SQLType . _cType
 {-| Converts a type column to an antyped column.
 -}
 untypedCol :: Column ref a -> DynColumn
-untypedCol = pure . _unsafeCastColData . _dropReference
+untypedCol = pure . _unsafeCastColData . dropColReference
 
 {-| Casts a dynamic column to a statically typed column.
 
@@ -98,7 +100,7 @@ built using the buildType function).
 -}
 castCol :: ColumnReference ref -> SQLType a -> DynColumn -> Try (Column ref a)
 castCol r sqlt dc =
-  dc >>= _checkedCastColData sqlt >>= _checkedCastRefColData r
+  dc >>= castTypeCol sqlt >>= _checkedCastRefColData r
 
 {-| Casts a dynamic column to a statically typed column, but does not attempt
 to enforce a single origin at the type level.
@@ -108,6 +110,16 @@ cannot be conveyed since it is not available in the first place.
 -}
 castCol' :: SQLType a -> DynColumn -> Try (Column UnknownReference a)
 castCol' = castCol ColumnReference
+
+
+-- | (internal)
+castTypeCol :: SQLType b -> ColumnData ref a -> Try (ColumnData ref b)
+castTypeCol sqlt cd =
+  if unSQLType sqlt == unSQLType (colType cd)
+    then pure (_unsafeCastColData cd)
+    else tryError $ sformat ("Cannot cast column "%sh%" to type "%sh) cd sqlt
+
+
 
 -- (internal)
 colOrigin :: Column ref a -> UntypedDataset
@@ -201,17 +213,11 @@ _colStaticProjToDynProj (StaticColProjection (SQLType dtFrom, fp, SQLType dtTo))
     else pure (fp, dtTo)
 
 iUntypedColData :: Column ref a -> UntypedColumnData
-iUntypedColData = _unsafeCastColData . _dropReference
+iUntypedColData = _unsafeCastColData . dropColReference
 
 -- Recasts the column, trusting the user knows that the type is going to be compatible.
 _unsafeCastColData :: Column ref a -> Column ref b
 _unsafeCastColData c = c { _cType = _cType c }
-
-_checkedCastColData :: SQLType b -> ColumnData ref a -> Try (ColumnData ref b)
-_checkedCastColData sqlt cd =
-  if unSQLType sqlt == unSQLType (colType cd)
-    then pure (_unsafeCastColData cd)
-    else tryError $ sformat ("Cannot cast column "%sh%" to type "%sh) cd sqlt
 
 _checkedCastRefColData :: ColumnReference ref2 -> ColumnData ref a -> Try (ColumnData ref2 a)
 _checkedCastRefColData _ cd =
@@ -263,7 +269,7 @@ _projectColData0 cd (FieldPath p) dtTo =
 
 _projectDynColData :: ColumnData ref a -> DynamicColProjection -> DynColumn
 _projectDynColData cd proj =
-  _dynProjTry proj (_cType cd) <&> uncurry (_projectColData0 . _dropReference $ cd)
+  _dynProjTry proj (_cType cd) <&> uncurry (_projectColData0 . dropColReference $ cd)
 
 _projectDynCol :: DynColumn -> DynamicColProjection -> DynColumn
 _projectDynCol c proj = do
@@ -290,8 +296,8 @@ _extractField (SQLType (NullableType (Struct (StructType fields)))) f =
   SQLType . structFieldType <$> z
 _extractField _ _ = Nothing
 
-_dropReference :: ColumnData ref a -> ColumnData UnknownReference a
-_dropReference c = c {_cOp = _cOp c}
+dropColReference :: ColumnData ref a -> ColumnData UnknownReference a
+dropColReference c = c {_cOp = _cOp c}
 
 -- | (internal) creates a new column with some empty data
 iEmptyCol :: Dataset a -> SQLType b -> FieldPath -> Column a b
@@ -299,7 +305,7 @@ iEmptyCol = _emptyColData
 
 -- | (internal) Creates a new column with a dynamic type.
 _emptyDynCol :: Dataset a -> DataType -> FieldPath -> DynColumn
-_emptyDynCol ds dt fp = Right $ _dropReference $ _emptyColData ds (SQLType dt) fp
+_emptyDynCol ds dt fp = Right $ dropColReference $ _emptyColData ds (SQLType dt) fp
 
 -- A new column data structure.
 _emptyColData :: Dataset a -> SQLType b -> FieldPath -> ColumnData a b

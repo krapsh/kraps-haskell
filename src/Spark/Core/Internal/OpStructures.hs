@@ -225,7 +225,10 @@ data NodeOp =
   | NodeLocalLit !DataType !Value
     -- | Some aggregator that does not respect any particular invariant.
   | NodeOpaqueAggregator StandardOperator
-  | NodeGroupedReduction !ColOp !AggOp
+    -- It implicicty expects a dataframe with 2 fields:
+    --  - the first field is used as a key
+    --  - the second field is passed to the reducer
+  | NodeGroupedReduction !AggOp
   | NodeReduction !AggTransform
     -- TODO: remove these
     -- | A universal aggregator.

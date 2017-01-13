@@ -14,6 +14,8 @@ module Spark.Core.StructuresInternal(
   fieldName,
   unsafeFieldName,
   emptyFieldPath,
+  nullFieldPath,
+  headFieldPath,
   fieldPath,
 ) where
 
@@ -65,6 +67,13 @@ fieldPath x = Right . FieldPath . V.singleton $ FieldName x
 
 emptyFieldPath :: FieldPath
 emptyFieldPath = FieldPath V.empty
+
+nullFieldPath :: FieldPath -> Bool
+nullFieldPath = V.null . unFieldPath
+
+headFieldPath :: FieldPath -> Maybe FieldName
+headFieldPath (FieldPath v) | V.null v = Nothing
+headFieldPath (FieldPath v) = Just $ V.head v
 
 -- | The concatenated path. This is the inverse function of fieldPath.
 catNodePath :: NodePath -> T.Text

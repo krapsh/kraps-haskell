@@ -35,7 +35,7 @@ simpleShowOp (NodeAggregatorReduction ua) = _prettyShowAggTrans . uaoInitialOute
 simpleShowOp (NodeAggregatorLocalReduction ua) = _prettyShowSGO . uaoMergeBuffer $ ua
 simpleShowOp (NodeStructuredTransform _) = "org.spark.Select"
 simpleShowOp (NodeDistributedLit _ _) = "org.spark.Constant"
-simpleShowOp (NodeGroupedReduction _ _) = missing "simpleShowOp: NodeGroupedReduction"
+simpleShowOp (NodeGroupedReduction _) = missing "simpleShowOp: NodeGroupedReduction"
 simpleShowOp (NodeReduction _) = missing "simpleShowOp: NodeReduction"
 
 -- A human-readable string that represents column operations.

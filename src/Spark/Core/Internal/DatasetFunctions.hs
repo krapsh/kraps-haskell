@@ -49,6 +49,7 @@ module Spark.Core.Internal.DatasetFunctions(
   nodeOpToFun2Untyped,
   unsafeCastDataset,
   placeholder,
+  castType,
   -- Internal
   opnameCache,
   opnameUnpersist,
@@ -432,15 +433,18 @@ instance forall loc. A.ToJSON (TypedLocality loc) where
 unsafeCastDataset :: ComputeNode LocDistributed a -> ComputeNode LocDistributed b
 unsafeCastDataset ds = ds { _cnType = _cnType ds }
 
-_asTyped :: forall loc a. (SQLTypeable a) => Try (ComputeNode loc Cell) -> Try (ComputeNode loc a)
-_asTyped df = do
+castType :: SQLType a -> Try (ComputeNode loc Cell) -> Try (ComputeNode loc a)
+castType sqlt df = do
   n <- df
-  let dt = unSQLType (buildType :: SQLType a)
+  let dt = unSQLType sqlt
   let dt' = unSQLType (nodeType n)
   if dt == dt'
     then pure (_unsafeCastNode n)
     else tryError $ sformat ("Casting error: dataframe has type "%sh%" incompatible with type "%sh) dt' dt
 
+
+_asTyped :: forall loc a. (SQLTypeable a) => Try (ComputeNode loc Cell) -> Try (ComputeNode loc a)
+_asTyped = castType (buildType :: SQLType a)
 
 -- Performs an unsafe type recast.
 -- This is useful for internal code that knows whether
