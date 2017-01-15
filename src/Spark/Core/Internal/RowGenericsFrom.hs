@@ -20,6 +20,7 @@ module Spark.Core.Internal.RowGenericsFrom(
 
 import GHC.Generics
 import Data.Text(Text, pack)
+import Control.Applicative(liftA2)
 import Control.Monad.Except
 import Formatting
 import qualified Data.Vector as V
@@ -58,12 +59,24 @@ instance FromSQL Int where
   _cellToValue (IntElement x) = pure x
   _cellToValue x = throwError $ sformat ("FromSQL: Decoding an int from "%shown) x
 
+instance FromSQL Text where
+  _cellToValue (StringElement txt) = pure txt
+  _cellToValue x = throwError $ sformat ("FromSQL: Decoding a unicode text from "%shown) x
+
 instance FromSQL Cell where
   _cellToValue = pure
 
 instance FromSQL a => FromSQL [a] where
   _cellToValue (RowArray xs) = sequence (_cellToValue <$> V.toList xs)
   _cellToValue x = throwError $ sformat ("FromSQL: Decoding array from "%shown) x
+
+instance (FromSQL a1, FromSQL a2) => FromSQL (a1, a2) where
+  _cellToValue (RowArray xs) = case V.toList xs of
+    [x1, x2] ->
+      liftA2 (,) (_cellToValue x1) (_cellToValue x2)
+    l -> throwError $ sformat ("FromSQL: Expected 2 elements but got "%sh) l
+  _cellToValue x = throwError $ sformat ("FromSQL: Decoding array from "%shown) x
+
 -- ******* GENERIC ********
 
 class GFromSQL r where
@@ -72,24 +85,18 @@ class GFromSQL r where
 instance GFromSQL U1 where
   _gFcell x = failure $ pack $ "GFromSQL UI called" ++ show x
 
+_f :: Monad m => m (f p) -> m (g p) -> m ((:*:) f g p)
+_f x1t x2t = do
+  x1 <- x1t
+  x2 <- x2t
+  return (x1 :*: x2)
+
 instance (GFromSQL a, GFromSQL b) => GFromSQL (a :*: b) where
   _gFcell (D2Normal (RowArray arr)) | not (V.null arr) =
     let (cell : l) = V.toList arr
-        x1t = _gFcell (D2Normal cell)
-        x2t = _gFcell (D2Cons l)
-        x = do
-          x1 <- x1t
-          x2 <- x2t
-          return (x1 :*: x2)
-    in x
+    in _f (_gFcell (D2Normal cell)) (_gFcell (D2Cons l))
   _gFcell (D2Cons (cell : l)) =
-    let x1t = _gFcell (D2Cons [cell])
-        x2t = _gFcell (D2Cons l)
-        x = do
-          x1 <- x1t
-          x2 <- x2t
-          return (x1 :*: x2)
-    in x
+    _f (_gFcell (D2Cons [cell])) (_gFcell (D2Cons l))
   _gFcell x = failure $ pack ("GFromSQL (a :*: b) " ++ show x)
 
 

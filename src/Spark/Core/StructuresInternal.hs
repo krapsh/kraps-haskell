@@ -13,6 +13,9 @@ module Spark.Core.StructuresInternal(
   catNodePath,
   fieldName,
   unsafeFieldName,
+  emptyFieldPath,
+  nullFieldPath,
+  headFieldPath,
   fieldPath,
 ) where
 
@@ -61,6 +64,16 @@ unsafeFieldName = forceRight . fieldName
 -- TODO: proper implementation
 fieldPath :: T.Text -> Either String FieldPath
 fieldPath x = Right . FieldPath . V.singleton $ FieldName x
+
+emptyFieldPath :: FieldPath
+emptyFieldPath = FieldPath V.empty
+
+nullFieldPath :: FieldPath -> Bool
+nullFieldPath = V.null . unFieldPath
+
+headFieldPath :: FieldPath -> Maybe FieldName
+headFieldPath (FieldPath v) | V.null v = Nothing
+headFieldPath (FieldPath v) = Just $ V.head v
 
 -- | The concatenated path. This is the inverse function of fieldPath.
 catNodePath :: NodePath -> T.Text

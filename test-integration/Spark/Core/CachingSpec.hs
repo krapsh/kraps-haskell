@@ -19,7 +19,7 @@ collectIdempotent l = do
   let ds = dataset l
   let ds' = autocache ds
   let c1 = asCol ds'
-  let s1 = colSum c1
+  let s1 = sumCol c1
   let s2 = count ds'
   let x = s1 + s2
   l2 <- exec1Def x

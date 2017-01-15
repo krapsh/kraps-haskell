@@ -7,6 +7,7 @@ module Spark.Core.Internal.TypesFunctions(
   unsafeCastType,
   intType,
   arrayType,
+  compatibleTypes,
   arrayType',
   frameTypeFromCol,
   colTypeFromFrame,
@@ -14,6 +15,7 @@ module Spark.Core.Internal.TypesFunctions(
   structField,
   structType,
   structTypeFromFields,
+  tupleType,
   structName,
   iSingleField,
   -- cellType,
@@ -74,6 +76,25 @@ colTypeFromFrame st @ (StructType fs) = case V.toList fs of
 
 
 -- The strict int type
+
+compatibleTypes :: DataType -> DataType -> Bool
+compatibleTypes (StrictType sdt) (StrictType sdt') = _compatibleTypesStrict sdt sdt'
+compatibleTypes (NullableType sdt) (NullableType sdt') = _compatibleTypesStrict sdt sdt'
+compatibleTypes _ _ = False
+
+_compatibleTypesStrict :: StrictDataType -> StrictDataType -> Bool
+_compatibleTypesStrict IntType IntType = True
+_compatibleTypesStrict StringType StringType = True
+_compatibleTypesStrict (ArrayType et) (ArrayType et') = compatibleTypes et et'
+_compatibleTypesStrict (Struct (StructType v)) (Struct (StructType v')) =
+  (length v == length v') &&
+    and (V.zipWith compatibleTypes (structFieldType <$> v) (structFieldType <$> v'))
+_compatibleTypesStrict _ _ = False
+
+tupleType :: SQLType a -> SQLType b -> SQLType (a, b)
+tupleType (SQLType dt1) (SQLType dt2) =
+  SQLType $ structType [structField "_1" dt1, structField "_2" dt2]
+
 intType :: DataType
 intType = StrictType IntType
 

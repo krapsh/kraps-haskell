@@ -93,7 +93,6 @@ Most of the underlying engines is working. Some important pieces are
 still incomplete or missing though:
   - simple json ingest with data specification
   - debug mode for the backend (check for correctness)
-  - simple aggregations
   - autogeneration of accessors with template haskell
   - better IHaskell interface (especially for reporting errors)
 

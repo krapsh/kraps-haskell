@@ -1,5 +1,5 @@
 name:                krapsh
-version:             0.1.7.0
+version:             0.1.9.0
 synopsis:            Haskell bindings for Spark Dataframes and Datasets
 description:         Krapsh is an exploration vehicle for developing safe,
                      robust and reliable data pipelines over Apache Spark, using
@@ -34,6 +34,7 @@ library
                        Spark.Core.Internal.DAGStructures,
                        Spark.Core.Internal.DatasetFunctions,
                        Spark.Core.Internal.DatasetStructures,
+                       Spark.Core.Internal.Groups,
                        Spark.Core.Internal.Joins,
                        Spark.Core.Internal.LocalDataFunctions,
                        Spark.Core.Internal.OpFunctions,
@@ -104,6 +105,7 @@ test-suite krapsh-test
                        Spark.Core.Internal.RowUtilsSpec,
                        Spark.Core.Internal.DAGFunctionsSpec,
                        Spark.Core.Internal.PathsSpec,
+                       Spark.Core.Internal.GroupsSpec,
                        Spark.Core.PathSpec,
                        Spark.Core.ProjectionsSpec,
                        Spark.Core.RowToSQLSpec,
@@ -121,7 +123,7 @@ test-suite krapsh-test
                      , raw-strings-qq
                      , QuickCheck
                      , vector
-  ghc-options:         -fhpc -O0 -Wall -ddump-deriv
+  ghc-options:         -fhpc -O0 -Wall
 --  ghc-options:         -ddump-deriv -O0 -rtsopts=all -prof -auto-all
   default-language:    Haskell2010
 
@@ -131,6 +133,7 @@ test-suite krapsh-test-integration
   main-is:             Spec.hs
   other-modules:       Spark.Core.CachingSpec,
                        Spark.Core.CollectSpec,
+                       Spark.Core.GroupsSpec,
                        Spark.Core.IntegrationUtilities,
                        Spark.Core.JoinsSpec,
                        Spark.Core.SimpleAddSpec

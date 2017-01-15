@@ -39,7 +39,9 @@ cachingType n = traceHint ("cachingType: n="<>show' (nodeOp n)<>" res=") $ case 
   NodeDistributedOp so | soName so == opnameAutocache ->
     pure $ AutocacheOp (vertexToId n)
   NodeDistributedOp _ -> pure Through -- Nothing special for the other operations
-
+  NodeBroadcastJoin -> pure Through
+  NodeGroupedReduction _ -> pure Stop
+  NodeReduction _ -> pure Stop
 
 autocacheGen :: AutocacheGen UntypedNode
 autocacheGen = AutocacheGen {

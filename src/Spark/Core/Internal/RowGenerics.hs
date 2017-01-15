@@ -20,7 +20,7 @@ module Spark.Core.Internal.RowGenerics(
 
 import GHC.Generics
 import qualified Data.Vector as V
-import Data.Text(pack)
+import Data.Text(pack, Text)
 
 import Spark.Core.Internal.RowStructures
 import Spark.Core.Internal.Utilities
@@ -58,6 +58,10 @@ instance (ToSQL a, ToSQL b) => ToSQL (a, b) where
 
 instance ToSQL Int where
   _valueToCell = IntElement
+
+instance ToSQL Text where
+  _valueToCell = StringElement
+
 
 class GToSQL r where
   _g2buffer :: r a -> CurrentBuffer

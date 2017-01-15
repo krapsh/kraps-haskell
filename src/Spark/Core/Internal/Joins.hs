@@ -5,7 +5,9 @@ module Spark.Core.Internal.Joins(
   join,
   join',
   joinInner,
-  joinInner'
+  joinInner',
+  joinObs,
+  joinObs'
 ) where
 
 import qualified Data.Aeson as A
@@ -22,6 +24,7 @@ import Spark.Core.Internal.TypesStructures
 import Spark.Core.Internal.Utilities
 import Spark.Core.Internal.TypesFunctions(structTypeFromFields)
 import Spark.Core.Try
+import Spark.Core.StructuresInternal(unsafeFieldName)
 
 {-| Standard (inner) join on two sets of data.
 -}
@@ -50,6 +53,41 @@ joinInner' key1 val1 key2 val2 = do
   let ds = emptyDataset (NodeDistributedOp so) (SQLType dt)
   let f ds' = ds' { _cnParents = V.fromList [untyped df1, untyped df2] }
   return $ updateNode ds f
+
+{-| Broadcasts an observable alongside a dataset to make it available as an
+extra column.
+-}
+-- This is the low-level operation that is used to implement the other
+-- broadcast operations.
+joinObs :: (HasCallStack) => Column ref val -> LocalData val' -> Dataset (val, val')
+joinObs c ld =
+  -- TODO: has a forcing at the last moment so that we can at least
+  -- have stronger guarantees in the type coercion.
+  unsafeCastDataset $ forceRight $ joinObs' (untypedCol c) (pure (untypedLocalData ld))
+
+{-| Broadcasts an observable along side a dataset to make it available as
+an extra column.
+
+The resulting dataframe has 2 columns:
+ - one column called 'values'
+ - one column called 'broadcast'
+
+ Note: this is a low-level operation. Users may want to use broadcastObs instead.
+-}
+joinObs' :: DynColumn -> LocalFrame -> DataFrame
+joinObs' dc lf = do
+  let df = pack' dc
+  dc' <- df
+  c <- asCol' df
+  o <- lf
+  st <- structTypeFromFields [(unsafeFieldName "values", unSQLType (colType c)), (unsafeFieldName "broadcast", unSQLType (nodeType o))]
+  let sqlt = SQLType (StrictType (Struct st))
+  return $ emptyDataset NodeBroadcastJoin sqlt `parents` [untyped dc', untyped o]
+
+-- {-| Broadcasts an observable along the axis of a dataset.
+-- -}
+-- broadcastObs :: ColumnReference ref -> LocalData val -> Column ref val
+-- broadcastObs = missing "broadcastObs"
 
 _joinTypeInner :: DynColumn -> DynColumn -> DynColumn -> Try DataType
 _joinTypeInner kcol col1 col2 = do

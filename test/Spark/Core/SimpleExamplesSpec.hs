@@ -30,13 +30,13 @@ spec = do
   describe "Simple examples" $ do
     it "Precdence of renaming" $ do
       let numbers = asCol ds1
-      let s = colSum numbers
+      let s = sumCol numbers
       let numCount = count ds1
       let avg = s `div` numCount @@ "myaverage"
       _cnName avg `shouldSatisfy` isJust
     it "name for simple integers" $ do
       let numbers = asCol ds1
-      let s = colSum numbers
+      let s = sumCol numbers
       let numCount = count ds1
       let avg = s `div` numCount @@ "myaverage"
       -- TODO: should it show "value: int" instead?
