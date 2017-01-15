@@ -132,7 +132,6 @@ _collectAgg' dt =
     uaoMergeBuffer = OpaqueSemiGroupLaw soMono
   }
 
-
 applyUntypedUniAgg3 :: (DataType -> AggTry UniversalAggregatorOp) -> DynColumn -> LocalFrame
 applyUntypedUniAgg3 f dc = do
   c <- dc

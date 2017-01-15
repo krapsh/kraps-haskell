@@ -84,10 +84,10 @@ joinObs' dc lf = do
   let sqlt = SQLType (StrictType (Struct st))
   return $ emptyDataset NodeBroadcastJoin sqlt `parents` [untyped dc', untyped o]
 
-{-| Broadcasts an observable along the axis of a dataset.
--}
-broadcastObs :: ColumnReference ref -> LocalData val -> Column ref val
-broadcastObs = missing "broadcastObs"
+-- {-| Broadcasts an observable along the axis of a dataset.
+-- -}
+-- broadcastObs :: ColumnReference ref -> LocalData val -> Column ref val
+-- broadcastObs = missing "broadcastObs"
 
 _joinTypeInner :: DynColumn -> DynColumn -> DynColumn -> Try DataType
 _joinTypeInner kcol col1 col2 = do

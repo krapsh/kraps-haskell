@@ -219,6 +219,12 @@ iUntypedColData = _unsafeCastColData . dropColReference
 _unsafeCastColData :: Column ref a -> Column ref b
 _unsafeCastColData c = c { _cType = _cType c }
 
+_checkedCastColData :: SQLType b -> ColumnData ref a -> Try (ColumnData ref b)
+_checkedCastColData sqlt cd =
+  if unSQLType sqlt == unSQLType (colType cd)
+    then pure (_unsafeCastColData cd)
+    else tryError $ sformat ("Cannot cast column "%sh%" to type "%sh) cd sqlt
+
 _checkedCastRefColData :: ColumnReference ref2 -> ColumnData ref a -> Try (ColumnData ref2 a)
 _checkedCastRefColData _ cd =
   -- TODO: do some dynamic checks on the origin.
