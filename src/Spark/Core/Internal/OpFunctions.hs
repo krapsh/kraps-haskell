@@ -31,12 +31,16 @@ simpleShowOp (NodeLocalOp op) = soName op
 simpleShowOp (NodeDistributedOp op) = soName op
 simpleShowOp (NodeLocalLit _ _) = "org.spark.LocalConstant"
 simpleShowOp (NodeOpaqueAggregator op) = soName op
-simpleShowOp (NodeAggregatorReduction ua) = _prettyShowAggTrans . uaoInitialOuter $ ua
+simpleShowOp (NodeAggregatorReduction uao) =
+  case uaoInitialOuter uao of
+    OpaqueAggTransform so -> soName so
+    _ -> "org.spark.StructuredReduction"
 simpleShowOp (NodeAggregatorLocalReduction ua) = _prettyShowSGO . uaoMergeBuffer $ ua
 simpleShowOp (NodeStructuredTransform _) = "org.spark.Select"
 simpleShowOp (NodeDistributedLit _ _) = "org.spark.Constant"
-simpleShowOp (NodeGroupedReduction _) = missing "simpleShowOp: NodeGroupedReduction"
-simpleShowOp (NodeReduction _) = missing "simpleShowOp: NodeReduction"
+simpleShowOp (NodeGroupedReduction _) = "org.spark.GroupedReduction"
+simpleShowOp (NodeReduction _) = "org.spark.Reduction"
+simpleShowOp NodeBroadcastJoin = "org.spark.BroadcastJoin"
 
 -- A human-readable string that represents column operations.
 prettyShowColOp :: ColOp -> T.Text
@@ -57,7 +61,6 @@ _prettyShowAggOp (AggStruct v) =
 _prettyShowAggTrans :: AggTransform -> Text
 _prettyShowAggTrans (OpaqueAggTransform op) = soName op
 _prettyShowAggTrans (InnerAggOp ao) = _prettyShowAggOp ao
-_prettyShowAggTrans (InnerAggStruct v) = _prettyShowAggOp (AggStruct v)
 
 _prettyShowSGO :: SemiGroupOperator -> Text
 _prettyShowSGO (OpaqueSemiGroupLaw so) = soName so
@@ -81,6 +84,11 @@ extraNodeOpData (NodeDistributedLit dt lst) =
   A.object [ "cellType" .= toJSON dt,
              "content" .= toJSON lst]
 extraNodeOpData (NodeDistributedOp so) = soExtra so
+extraNodeOpData (NodeGroupedReduction ao) = toJSON ao
+extraNodeOpData (NodeAggregatorReduction ua) =
+  case uaoInitialOuter ua of
+    OpaqueAggTransform so -> toJSON (soExtra so)
+    InnerAggOp ao -> toJSON ao
 extraNodeOpData _ = A.Null
 
 -- Adds the content of a node op to a hash.
@@ -130,6 +138,30 @@ instance A.ToJSON ColOp where
           A.object ["name" .= T.pack (show fn), "op" .= toJSON colOp]
     in A.Array $ fun <$> v
 
+-- instance A.ToJSON AggTransform where
+--   toJSON (OpaqueAggTransform so) = A.object [
+--       "aggOpaqueTrans" .= toJSON so
+--     ]
+
+instance A.ToJSON UdafApplication where
+  toJSON Algebraic = toJSON (T.pack "algebraic")
+  toJSON Complete = toJSON (T.pack "complete")
+
+instance A.ToJSON AggField where
+  toJSON (AggField fn aggOp) =
+    A.object ["name" .= show' fn, "op" .= toJSON aggOp]
+
+instance A.ToJSON AggOp where
+  toJSON (AggUdaf ua ucn fp) = A.object [
+    "aggOp" .= T.pack "udaf",
+    "udafApplication" .= toJSON ua,
+    "className" .= ucn,
+    "field" .= toJSON fp]
+  toJSON (AggFunction sfn v) = A.object [
+    "aggOp" .= toJSON (T.pack "function"),
+    "functionName" .= toJSON sfn,
+    "fields" .= toJSON (V.toList v)]
+  toJSON (AggStruct v) = toJSON (V.toList v)
 
 _hashUpdateJson :: SHA.Ctx -> A.Value -> SHA.Ctx
 _hashUpdateJson ctx val = SHA.update ctx bs where

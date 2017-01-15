@@ -50,6 +50,7 @@ module Spark.Core.Internal.DatasetFunctions(
   unsafeCastDataset,
   placeholder,
   castType,
+  castType',
   -- Internal
   opnameCache,
   opnameUnpersist,
@@ -80,6 +81,7 @@ import Spark.Core.Internal.OpFunctions
 import Spark.Core.Internal.Utilities
 import Spark.Core.Internal.RowUtils
 import Spark.Core.Internal.TypesGenerics
+import Spark.Core.Internal.TypesFunctions
 
 -- | (developer) The operation performed by this node.
 nodeOp :: ComputeNode loc a -> NodeOp
@@ -433,18 +435,25 @@ instance forall loc. A.ToJSON (TypedLocality loc) where
 unsafeCastDataset :: ComputeNode LocDistributed a -> ComputeNode LocDistributed b
 unsafeCastDataset ds = ds { _cnType = _cnType ds }
 
-castType :: SQLType a -> Try (ComputeNode loc Cell) -> Try (ComputeNode loc a)
-castType sqlt df = do
-  n <- df
+-- TODO: figure out the story around haskell types vs datatypes
+-- Should we have equivalence classes for haskell, so that a tuple has the
+-- same type as a structure?
+-- Probably not, it breaks the correspondence.
+-- Probably, it makes the metadata story easier.
+castType :: SQLType a -> ComputeNode loc b -> Try (ComputeNode loc a)
+castType sqlt n = do
   let dt = unSQLType sqlt
   let dt' = unSQLType (nodeType n)
-  if dt == dt'
-    then pure (_unsafeCastNode n)
+  if dt `compatibleTypes` dt'
+    then let n' = updateNode n (\node -> node { _cnType = dt }) in
+      pure (_unsafeCastNode n')
     else tryError $ sformat ("Casting error: dataframe has type "%sh%" incompatible with type "%sh) dt' dt
 
+castType' :: SQLType a -> Try (ComputeNode loc Cell) -> Try (ComputeNode loc a)
+castType' sqlt df = df >>= castType sqlt
 
 _asTyped :: forall loc a. (SQLTypeable a) => Try (ComputeNode loc Cell) -> Try (ComputeNode loc a)
-_asTyped = castType (buildType :: SQLType a)
+_asTyped = castType' (buildType :: SQLType a)
 
 -- Performs an unsafe type recast.
 -- This is useful for internal code that knows whether

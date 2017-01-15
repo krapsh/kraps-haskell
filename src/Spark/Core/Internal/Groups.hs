@@ -20,6 +20,7 @@ module Spark.Core.Internal.Groups(
 import qualified Data.Text as T
 import qualified Data.Vector as V
 import Formatting
+import Debug.Trace(trace)
 
 import Spark.Core.Internal.DatasetStructures
 import Spark.Core.Internal.ColumnStructures
@@ -27,7 +28,7 @@ import Spark.Core.Internal.ColumnFunctions(untypedCol, colType, colOp, iUntypedC
 import Spark.Core.Internal.DatasetFunctions
 import Spark.Core.Internal.LocalDataFunctions()
 import Spark.Core.Internal.FunctionsInternals
-import Spark.Core.Internal.TypesFunctions(tupleType)
+import Spark.Core.Internal.TypesFunctions(tupleType, structTypeFromFields)
 import Spark.Core.Internal.OpStructures
 import Spark.Core.Internal.TypesStructures
 import Spark.Core.Internal.Utilities
@@ -94,20 +95,19 @@ will fail if the function is not universal.
 -}
 -- TODO: it should be a try, this can fail
 aggKey :: (HasCallStack) => GroupData key val -> (forall ref. Column ref val -> LocalData val') -> Dataset (key, val')
-aggKey gd f =
+aggKey gd f = trace "aggKey" $
   let ugd = _untypedGroup gd
-      keyt = mapGroupKeys gd colType
-      valt = mapGroupValues gd colType
+      keyt = traceHint "aggKey: keyt: " $  mapGroupKeys gd colType
+      valt = traceHint "aggKey: valt: " $  mapGroupValues gd colType
       -- We call the function twice: the first one to recover the type info,
       -- and the second time to perform the unrolling.
       -- TODO we should be able to do it in one pass instead.
-      fOut = f $ mapGroupValues gd dropColReference
-      valt' = nodeType fOut
-      t = tupleType keyt valt'
+      fOut = traceHint "aggKey: fOut: " $  f (mapGroupValues gd dropColReference)
+      valt' = traceHint "aggKey: valt': " $ nodeType fOut
+      t = traceHint "aggKey: t: " $ tupleType keyt valt'
       f' c = untypedLocalData . f <$> castTypeCol valt c
-      tud = _aggKey ugd f'
-      g = castType t
-      res = g tud
+      tud = traceHint "aggKey: tud: " $ _aggKey ugd f'
+      res = castType' t tud
   in forceRight res
 
 {-| Creates a group by 'expanding' a value into a potentially large collection.
@@ -179,7 +179,7 @@ _unrollTransform start nid un = case nodeParents un of
       _pError $ sformat (sh%": operations with multiple parents cannot be used in groups yet.") un
 
 _unrollStep :: PipedTrans -> UntypedNode -> PipedTrans
-_unrollStep pt un =
+_unrollStep pt un = traceHint ("_unrollStep: pt=" <> show' pt <> " un=" <> show' un <> " res=") $
   let op = nodeOp un
       dt = unSQLType (nodeType un) in case nodeParents un of
     [p] ->
@@ -197,20 +197,25 @@ _unrollStep pt un =
             OpaqueAggTransform x -> _pError $ sformat ("Cannot apply opaque transform in the context of an aggregation: "%sh) x
             InnerAggOp ao ->
               PipedDataset $ _applyAggOp dt ao g
-            InnerAggStruct v ->
-              PipedDataset $ _applyAggOp dt (AggStruct v) g
         _ -> _pError $ sformat (sh%": Operation not supported with trans="%sh%" and parents="%sh) op pt p
     l -> _pError $ sformat (sh%": expected one parent but got "%sh) un l
 
+-- dt: output type of the aggregation op
 _applyAggOp :: (HasCallStack) => DataType -> AggOp -> UntypedGroupData -> UntypedDataset
-_applyAggOp dt ao ugd =
+_applyAggOp dt ao ugd = traceHint ("_applyAggOp dt=" <> show' dt <> " ao=" <> show' ao <> " ugd=" <> show' ugd <> " res=") $
   -- Reset the names to make sure there are no collision.
   let c1 = untypedCol (_gdKey ugd) @@ T.unpack "_1"
       c2 = untypedCol (_gdValue ugd) @@ T.unpack "_2"
       s = struct' [c1, c2]
       p = pack1 <$> s
       ds = forceRight p
-      ds2 = emptyDataset (NodeGroupedReduction ao) (SQLType dt) `parents` [untyped ds]
+      -- The structure of the result dataframe
+      keyDt = unSQLType (colType (_gdKey ugd))
+      st' = structTypeFromFields [(unsafeFieldName "key", keyDt), (unsafeFieldName "agg", dt)]
+      -- The keys are different, so we know we this operation is legit:
+      st = forceRight st'
+      resDt = SQLType . StrictType . Struct $ st
+      ds2 = emptyDataset (NodeGroupedReduction ao) resDt `parents` [untyped ds]
   in ds2
 
 _unrollGroupTrans :: UntypedGroupData -> ColOp -> PipedTrans

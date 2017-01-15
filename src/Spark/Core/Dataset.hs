@@ -24,6 +24,8 @@ module Spark.Core.Dataset(
   asDF,
   asDS,
   asLocalObservable,
+  castType,
+  castType',
   -- * Relations
   parents,
   untyped,

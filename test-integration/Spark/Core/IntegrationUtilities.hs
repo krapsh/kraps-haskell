@@ -6,10 +6,12 @@
 module Spark.Core.IntegrationUtilities where
 
 import GHC.Generics (Generic)
+import Data.Text(Text)
 
 import Spark.Core.Context
 import Spark.Core.Types
 import Spark.Core.Row
+import Spark.Core.Column
 
 data TestStruct1 = TestStruct1 {
   ts1f1 :: Int,
@@ -51,3 +53,14 @@ data TestStruct6 = TestStruct6 {
 newtype TestT1 = TestT1 {
   unTestT1 :: Int
 } deriving (Eq, Show, Generic, Num)
+
+data MyPair = MyPair {
+  myKey :: Text,
+  myVal :: Int } deriving (Generic, Show)
+
+myKey' :: StaticColProjection MyPair Text
+myKey' = unsafeStaticProjection buildType "myKey"
+myVal' :: StaticColProjection MyPair Int
+myVal' = unsafeStaticProjection buildType "myVal"
+instance SQLTypeable MyPair
+instance ToSQL MyPair

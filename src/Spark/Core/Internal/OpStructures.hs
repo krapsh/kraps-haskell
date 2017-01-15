@@ -132,16 +132,11 @@ data AggField = AggField {
   afValue :: !AggOp
 } deriving (Eq, Show)
 
-{-| Unlike the structured transforms, the aggregation transforms do not allow
-nesting of elements.
-
-This is not a limitation in practice, as a nesting can be appended after an
-aggregation transform.
+{-|
 -}
 data AggTransform =
     OpaqueAggTransform !StandardOperator
-  | InnerAggOp !AggOp
-  | InnerAggStruct !(Vector AggField) deriving (Eq, Show)
+  | InnerAggOp !AggOp deriving (Eq, Show)
 
 {-| The representation of a semi-group law in Spark.
 
@@ -218,11 +213,15 @@ Each node operation is associated with:
 Additionally, some operations are associated with algebraic invariants
 to enable programmatic transformations.
 -}
+-- TODO: way too many different ops. Restructure into a few fundamental ops with
+-- options.
 data NodeOp =
     -- | An operation between local nodes: [Observable] -> Observable
     NodeLocalOp StandardOperator
     -- | An observable literal
   | NodeLocalLit !DataType !Value
+    -- | A special join that broadcasts a value along a dataset.
+  | NodeBroadcastJoin
     -- | Some aggregator that does not respect any particular invariant.
   | NodeOpaqueAggregator StandardOperator
     -- It implicicty expects a dataframe with 2 fields:

@@ -133,6 +133,7 @@ test-suite krapsh-test-integration
   main-is:             Spec.hs
   other-modules:       Spark.Core.CachingSpec,
                        Spark.Core.CollectSpec,
+                       Spark.Core.GroupsSpec,
                        Spark.Core.IntegrationUtilities,
                        Spark.Core.JoinsSpec,
                        Spark.Core.SimpleAddSpec
