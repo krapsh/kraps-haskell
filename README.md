@@ -18,87 +18,53 @@ The name is a pun on the dice game called craps, because like data science, it
 is easy to start rolling dice, and there is a significant element of chance
 involved in getting any significant benefit from your data. It also happens to be the anagram of Spark. The programming model is strongly influenced by the TensorFlow project and follows a similar design.
 
-## Introduction
+## How to use
 
-This project explores an alternative API to run complex workflows on top of
-Apache Spark. Note that it is neither endorsed or supported by the Apache
-Foundation nor by Databricks, Inc.
+You need an installation of Spark that runs the `kraps-server` Spark package. See the [kraps-server project](https://github.com/krapsh/kraps-server) for more
+details.
 
-For the developers of Spark bindings:
+Once you have Spark running, you can load this project as a library and follow the examples in the `notebooks` directory:
 
-By using this API, rich transforms can be expressed on top of Spark using various programming languages, without having to communicate with Java objects. Each programming language only needs to implement a relatively small interface that does not rely on features specific to the Java virtual machines, and that can be implemented using standard REST technologies. Each language is then free to express computations using the most idiomatic way of this language.
+```hs
+import Spark.Core.Dataset
+import Spark.Core.Context
+import Spark.Core.Functions
+import Spark.Core.Column
+import Spark.Core.ColumnFunctions
 
-As a reference, a set of bindings is being developed in the Haskell programming language and is used as the reference implementation. Despite its limited usage in data science, it is a useful tool to design strongly principled APIs that work across various programming languages.
+let ds = dataset ([1 ,2, 3, 4]::[Int])
+let c = count ds
+mycount <- exec1Def c
+```
 
+## Status
 
-For the user:
+This project has so far focused on solving the most challenging issues, at the
+expense of coverage of Spark. That being said, the basic building blocks of
+Spark are here:
+ - dataframes, datasets and observables (the results of `collect`)
+ - basic data types: ints, strings, arrays, structures (nullable and strict)
+ - basic arithmetic operators on columns of data
+ - converting between the typed and untyped operations
+ - grouping, joining
 
-The user may be interested by a few features unique to this interface.
+You can take a look at the notebooks in the `notebooks` directory to see what is
+possible currently.
 
-1. Lazy computations.
-No call to Spark is issued until a result is absolutely required. Unlike standard Spark interfaces, even aggregation operations such as `collect()` or `sum()` are lazy. This allows Krapsh to perform whole-program analysis of the computation and to make optimizations that are currently beyond the reach of Spark.
+What is missing? A lot of things. In particular, users will most probably miss:
+ - an input interface. The only way to use the bindings is currently to pass a list of data.
+ - filters
+ - long types, floats, doubles
+ - broadcasting observables (scalar * col). This one is interesting and is probably the next piece.
+ - setting the number of partitions of the data
 
-2. Strong checks.
-Thanks to lazy evaluation, a complete data science pipeline can be checked for correctness before it is evaluated. This is useful when composing multiple notebooks or commands together. For example, a lot of interesting operations in Spark such as Machine Learning algorithms involve an aggregation step. In Spark, such a step would break the analysis of the program and prevent the Spark analyzer from checking further transforms. Krapsh does not suffer from such limitations and checks all the pipeline at once.
+## Contributions
 
-3. Automatic resource management.
-Because Krapsh has a global view of the pipeline, it can check when data needs to be cached or uncached. It is able to schedule caching and uncaching operations automatically, and it refuses to run program that may be incorrect with respect to caching (for example when uncaching happens before the data is accessed again)
+Contributions are most welcome. This is the author's _first_ Haskell project, so
+all suggestions regarding style, idiomatic code, etc. will be gladly accepted.
+Also, if someone wants to setup a style checker, it will be really helpful.
 
-4. Complex nested pipelines.
-Computations can be arbitrarily nested and composed, allowing to conceptually condense complex sequences of operations into a single high-level operations. This is useful for debugging and understanding a pipeline at a high-level without being distracted by the implementation details of each step. This follows the same approach as TensorFlow.
+## Theory
 
-5. Stable format and language agnostic.
-A complex pipeline may be stored as a JSON file in one programming language and read/restored in a different programming language. If this program is run on the same session, that other language can access the cached data.
-
-## Installation
-
-You need the stack tool to build and install Krapsh. Additionally, you will need the Kraps server running to run some queries against Spark.
-
-
-## Development ideas
-
-These are notes for developers interested in understanding the general philosophy behind Krapsh.
-
-Doing data science at scale is hard and requires multiple iterations. Accessing the data can be a long operations (minutes, or hours), even in Spark. Because of that, data should only be accessed if we are reasonably confident that the program is going to finish.
-
-As a result, Krapsh is designed to detect a number of common programming mistakes in Spark before even attempting to access the data. These checks are either enforced by the runtime, or by Haskell's compiler when using the typed API. This is possible thanks to whole program analysis and lazy evaluation.
-
-The execution model is heavily inspired by TensorFlow:
-
-1. Deterministic operations:
-All the operations are deterministic, and some non-deterministic operations such as `currentTime` in SQL are forbidden. While this may seem a restriction, it provides multiple benefits such as aggressive caching and computation reuse.
-
-2. Stateless operations on a graph. A lot of the transforms operate as simple graph transforms and will eventually be merged in the server, making them available to all languages.
-
-3. Simple JSON-based format for encoding transform. It may be switched to Protocol Buffers (v3) if I figure out how to use it with Haskell and Spray-Can.
-
-4. Separation of the description of the transform from the operational details required by Spark.
-
-5. Trying to use the type system in the most effective way (Haskell interface). Making sure that the type system can enforce some simple rules such as not adding an integer to a string, but at the same time trying to give understandable error messages to the user when something goes wrong.
-
-
-## Differences from Spark
-
-As mentioned Krapsh attempts to provide strong semantic guarantees at the expense of some flexibility.
-
-In order to guarantee determinism, some operations are/will be forbidden:
- - randn() and rand() without a seed
- - get_current_time
-
-Also, all the operations are meant to be expressed in a way that does not depend on the partitioning of the data. This is a significant departure from Spark, in which the PartitionID is available. It is possible in most cases to replace these at the expense of extra shuffles. In this case, it is considered worth it because of the strong guarantees that it offers with respect to reproducibility. In any case, it is a matter of debate.
-
-## Current status
-
-Most of the underlying engines is working. Some important pieces are
-still incomplete or missing though:
-  - simple json ingest with data specification
-  - debug mode for the backend (check for correctness)
-  - autogeneration of accessors with template haskell
-  - better IHaskell interface (especially for reporting errors)
-
-Advanced feature that require more thoughts are considered after that:
-  - SQL commands (interned strings)
-  - user-defined functions (Scala only)
-  - simple ML pipelines
-  - auto differentiation
-  - meta data and user-defined types
+The API and design goals are slightly more general than Spark's. A more thorough
+explanation can be found in the `INTRO.md` file.
