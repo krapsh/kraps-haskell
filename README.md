@@ -27,7 +27,8 @@ These instructions assume that the following software is installed on your compu
 _Launching Spark locally_ Assuming the `SPARK_HOME` environment variable is set
 to the location of your current installation of Spark, run:
 ```sh
-$SPARK_HOME/bin/spark-shell --packages krapsh:kraps-server:0.1.9-s_2.11 --name kraps-server --class org.krapsh.Boot --master "local[1]" -v
+$SPARK_HOME/bin/spark-shell --packages krapsh:kraps-server:0.1.9-s_2.11\
+   --name kraps-server --class org.krapsh.Boot --master "local[1]" -v
 ```
 
 You should see a flurry of log messages that ends with something like: `WARN SparkContext: Use an existing SparkContext, some configuration may not take effect.` The server is now running.
