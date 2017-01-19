@@ -65,7 +65,7 @@ experience and comes with beautiful introspection tools courtesy of the
 [TensorBoard server](https://www.tensorflow.org/how_tos/summaries_and_tensorboard/). Using
 Tensorboard, you can visualize, drill down, introspect the graph of computations:
 
-![image]()
+![image](https://github.com/krapsh/kraps-haskell/blob/37acdaf33e4bfb235acafd852e813f3747c3b3f7/notebooks/ihaskell-tensorboard.png)
 
 IHaskell can be challenging to install, so a docker installation script is provided. You will need to install [Docker](https://www.docker.com/) on your computer to run Kraps with IHaskell.
 
