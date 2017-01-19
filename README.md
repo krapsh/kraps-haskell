@@ -18,32 +18,86 @@ The name is a pun on the dice game called craps, because like data science, it
 is easy to start rolling dice, and there is a significant element of chance
 involved in getting any significant benefit from your data. It also happens to be the anagram of Spark. The programming model is strongly influenced by the TensorFlow project and follows a similar design.
 
-## How to use
+## Installation (for users)
 
-You need an installation of Spark that runs the `kraps-server` Spark package. See the [kraps-server project](https://github.com/krapsh/kraps-server) for more
-details.
+These instructions assume that the following software is installed on your computer:
+ - Spark 2.x (2.1+ recommended). See the [installation instructions](http://spark.apache.org/docs/latest/#downloading) for a local install. It is usually a matter a downloading and unzipping the prebuilt binaries.
+ - the [stack build tool](https://docs.haskellstack.org/en/stable/README/)
 
-Once you have Spark running, you can load this project as a library and follow the examples in the `notebooks` directory:
+_Launching Spark locally_ Assuming the `SPARK_HOME` environment variable is set
+to the location of your current installation of Spark, run:
+```sh
+$SPARK_HOME/bin/spark-shell --packages krapsh:kraps-server:0.1.9-s_2.11\
+   --name kraps-server --class org.krapsh.Boot --master "local[1]" -v
+```
 
-```hs
+You should see a flurry of log messages that ends with something like: `WARN SparkContext: Use an existing SparkContext, some configuration may not take effect.` The server is now running.
+
+_Connecting the Kraps-Haskell client_ All the integration tests should be able
+to connect to the server and execute some Spark commands:
+
+```sh
+stack build
+stack test
+```
+
+You are now all set to run your first interactive program:
+
+```sh
+stack ghci
+```
+
+```haskell
 import Spark.Core.Dataset
 import Spark.Core.Context
 import Spark.Core.Functions
-import Spark.Core.Column
-import Spark.Core.ColumnFunctions
-
 let ds = dataset ([1 ,2, 3, 4]::[Int])
 let c = count ds
+
+createSparkSessionDef defaultConf
 mycount <- exec1Def c
+```
+
+## Installation (GUI, for users)
+
+Kraps can also take advantage of the [Haskell kernel for Jupyter](https://github.com/gibiansky/IHaskell), which provides a better user
+experience and comes with beautiful introspection tools courtesy of the
+[TensorBoard server](https://www.tensorflow.org/how_tos/summaries_and_tensorboard/). Using
+Tensorboard, you can visualize, drill down, introspect the graph of computations:
+
+![image](https://github.com/krapsh/kraps-haskell/blob/37acdaf33e4bfb235acafd852e813f3747c3b3f7/notebooks/ihaskell-tensorboard.png)
+
+IHaskell can be challenging to install, so a docker installation script is provided. You will need to install [Docker](https://www.docker.com/) on your computer to run Kraps with IHaskell.
+
+In the project directory, run:
+
+```bash
+docker build -t ihaskell-krapsh .
+docker run -it --volume $(pwd)/notebooks:/krapsh/notebooks \
+  --publish 8888:8888  ihaskell-krapsh
+```
+
+The `notebooks` directory contains some example notebooks that you can run.
+
+Note that it still requires a running Spark server somewhere else: the docker
+container only runs the Haskell part.
+
+__MacOS users__ When running Docker with OSX, you may need to tell Docker how
+to communicate from inside a container to the local machine (if you run Spark
+outside Docker). Here is a command to launch Docker with the appropriate options:
+
+```bash
+docker run -it --volume $(pwd)/notebooks:/krapsh/notebooks \
+  --publish 8888:8888 --add-host="localhost:10.0.2.2" ihaskell-krapsh
 ```
 
 ## Status
 
 This project has so far focused on solving the most challenging issues, at the
-expense of coverage of Spark. That being said, the basic building blocks of
+expense of breadth and functionality. That being said, the basic building blocks of
 Spark are here:
  - dataframes, datasets and observables (the results of `collect`)
- - basic data types: ints, strings, arrays, structures (nullable and strict)
+ - basic data types: ints, strings, arrays, structures (both nullable and strict)
  - basic arithmetic operators on columns of data
  - converting between the typed and untyped operations
  - grouping, joining
