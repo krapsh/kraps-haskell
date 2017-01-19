@@ -18,7 +18,7 @@ The name is a pun on the dice game called craps, because like data science, it
 is easy to start rolling dice, and there is a significant element of chance
 involved in getting any significant benefit from your data. It also happens to be the anagram of Spark. The programming model is strongly influenced by the TensorFlow project and follows a similar design.
 
-## How to use (quick)
+## Installation (for users)
 
 These instructions assume that the following software is installed on your computer:
  - Spark 2.x (2.1+ recommended). See the [installation instructions](http://spark.apache.org/docs/latest/#downloading) for a local install. It is usually a matter a downloading and unzipping the prebuilt binaries.
@@ -56,6 +56,37 @@ let c = count ds
 
 createSparkSessionDef defaultConf
 mycount <- exec1Def c
+```
+
+## Installation (GUI, for users)
+
+Kraps can also take advantage of the [Haskell kernel for Jupyter](https://github.com/gibiansky/IHaskell), which provides a better user
+experience and comes with beautiful introspection tools courtesy of the
+[TensorBoard server](https://www.tensorflow.org/how_tos/summaries_and_tensorboard/). Using
+Tensorboard, you can visualize, drill down, introspect the graph of computations:
+
+![image]()
+
+IHaskell can be challenging to install, so a docker installation script is provided. You will need to install [Docker](https://www.docker.com/) on your computer to run Kraps with IHaskell.
+
+In the project directory, run:
+
+```bash
+docker build -t ihaskell-krapsh .
+docker run -it --volume $(pwd)/notebooks:/krapsh/notebooks --publish 8888:8888  ihaskell-krapsh
+```
+
+The `notebooks` directory contains some example notebooks that you can run.
+
+Note that it still requires a running Spark server somewhere else: the docker
+container only runs the Haskell part.
+
+__MacOS users__ When running Docker with OSX, you may need to tell Docker how
+to communicate from inside a container to the local machine (if you run Spark
+outside Docker). Here is a command to launch Docker with the appropriate options:
+
+```bash
+docker run -it --volume $(pwd)/notebooks:/krapsh/notebooks --publish 8888:8888 --add-host="localhost:10.0.2.2" ihaskell-krapsh
 ```
 
 ## Status
