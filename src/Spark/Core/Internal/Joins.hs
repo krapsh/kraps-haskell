@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-| Exposes some of Spark's joining algorithms.
 -}
 module Spark.Core.Internal.Joins(
