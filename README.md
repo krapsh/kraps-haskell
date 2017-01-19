@@ -73,7 +73,8 @@ In the project directory, run:
 
 ```bash
 docker build -t ihaskell-krapsh .
-docker run -it --volume $(pwd)/notebooks:/krapsh/notebooks --publish 8888:8888  ihaskell-krapsh
+docker run -it --volume $(pwd)/notebooks:/krapsh/notebooks \
+  --publish 8888:8888  ihaskell-krapsh
 ```
 
 The `notebooks` directory contains some example notebooks that you can run.
@@ -86,7 +87,8 @@ to communicate from inside a container to the local machine (if you run Spark
 outside Docker). Here is a command to launch Docker with the appropriate options:
 
 ```bash
-docker run -it --volume $(pwd)/notebooks:/krapsh/notebooks --publish 8888:8888 --add-host="localhost:10.0.2.2" ihaskell-krapsh
+docker run -it --volume $(pwd)/notebooks:/krapsh/notebooks \
+  --publish 8888:8888 --add-host="localhost:10.0.2.2" ihaskell-krapsh
 ```
 
 ## Status
