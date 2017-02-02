@@ -48,7 +48,8 @@ library
                        Spark.Core.Row,
                        Spark.Core.StructuresInternal,
                        Spark.Core.Try,
-                       Spark.Core.Types
+                       Spark.Core.Types,
+                       Spark.IO.Inputs
   other-modules:       Spark.Core.Internal.CachingUntyped,
                        Spark.Core.Internal.ColumnFunctions,
                        Spark.Core.Internal.AlgebraStructures,
@@ -62,7 +63,9 @@ library
                        Spark.Core.Internal.RowGenerics,
                        Spark.Core.Internal.RowGenericsFrom,
                        Spark.Core.Internal.RowStructures,
-                       Spark.Core.Internal.RowUtils
+                       Spark.Core.Internal.RowUtils,
+                       Spark.IO.Internal.InputGeneric,
+                       Spark.IO.Internal.Json
   build-depends:       aeson,
                        aeson-pretty,
                        base >= 4.8.1 && < 5,
@@ -136,7 +139,8 @@ test-suite krapsh-test-integration
                        Spark.Core.GroupsSpec,
                        Spark.Core.IntegrationUtilities,
                        Spark.Core.JoinsSpec,
-                       Spark.Core.SimpleAddSpec
+                       Spark.Core.SimpleAddSpec,
+                       Spark.IO.JsonSpec
   build-depends:       aeson
                      , base
                      , bytestring

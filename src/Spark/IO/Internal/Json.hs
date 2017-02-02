@@ -91,7 +91,7 @@ _jsonSourceDescription :: SparkPath -> JsonOptions -> SourceDescription
 _jsonSourceDescription sp jo = SourceDescription {
   inputSource = JsonSource,
   inputPath = sp,
-  userSchema = jsonSchema jo,
+  inputSchema = jsonSchema jo,
   sdOptions = _jsonOptions jo
 }
 

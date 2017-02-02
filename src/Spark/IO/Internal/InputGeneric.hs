@@ -69,7 +69,7 @@ for each of the most popular sources that are already built into Spark.
 data SourceDescription = SourceDescription {
   inputPath :: !SparkPath,
   inputSource :: !InputSource,
-  userSchema :: !DataSchema,
+  inputSchema :: !DataSchema,
   sdOptions :: !(M.Map InputOptionKey InputOptionValue)
 }
 
@@ -94,7 +94,7 @@ understand if the data does not follow the given schema.
 -}
 genericWithSchema' :: DataType -> SourceDescription -> DataFrame
 genericWithSchema' dt sd = asDF $ emptyDataset no (SQLType dt) where
-  sd' = sd { userSchema = UseSchema dt }
+  sd' = sd { inputSchema = UseSchema dt }
   so = StandardOperator {
       soName = "org.spark.GenericDatasource",
       soOutputType = dt,
@@ -147,7 +147,7 @@ instance A.ToJSON SourceDescription where
   toJSON sd = A.object [
                 "inputPath" .= toJSON (inputPath sd),
                 "inputSource" .= toJSON (inputSource sd),
-                "userSchema" .= toJSON (userSchema sd),
+                "inputSchema" .= toJSON (inputSchema sd),
                 "options" .= A.object (f <$> M.toList (sdOptions sd))
               ] where
                 f (k, v) = unInputOptionKey k .= toJSON v
