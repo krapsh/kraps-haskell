@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Spark.Core.Internal.TypesFunctions(
   isNullable,
@@ -22,14 +23,19 @@ module Spark.Core.Internal.TypesFunctions(
 ) where
 
 import qualified Data.Text as T
-import Data.List(sort, nub)
+import Data.List(sort, nub, sortBy)
+import Control.Monad((>=>))
+import Data.Function(on)
 import qualified Data.Vector as V
 import Data.Text(Text, intercalate)
+import qualified Data.Map.Strict as M
+import Control.Monad.Except
 import Formatting
 
 
 import Spark.Core.Internal.TypesStructures
 import Spark.Core.StructuresInternal
+import Spark.Core.Internal.RowGenericsFrom(FromSQL(..), TryS)
 import Spark.Core.Internal.Utilities
 import Spark.Core.Try
 
@@ -81,6 +87,72 @@ compatibleTypes :: DataType -> DataType -> Bool
 compatibleTypes (StrictType sdt) (StrictType sdt') = _compatibleTypesStrict sdt sdt'
 compatibleTypes (NullableType sdt) (NullableType sdt') = _compatibleTypesStrict sdt sdt'
 compatibleTypes _ _ = False
+
+-- ***** INSTANCES *****
+
+-- In the case of source introspection, datatypes may be returned.
+instance FromSQL DataType where
+  _cellToValue = _cellToValue >=> _sDataTypeFromRepr
+
+_sDataTypeFromRepr :: [DataTypeRepr] -> TryS DataType
+_sDataTypeFromRepr l = snd <$> _sToTreeRepr l
+
+_sToTreeRepr :: [DataTypeRepr] -> TryS (Int, DataType)
+_sToTreeRepr [] = throwError $ sformat ("_sToTreeRepr: empty list")
+_sToTreeRepr [dtr] | null (dtrFieldPath dtr) =
+  -- We are at a leaf, decode the leaf
+  _decodeLeaf dtr []
+_sToTreeRepr l = do
+  let f dtr = case dtrFieldPath dtr of
+                [] -> []
+                (h : t) -> [(h, dtr')] where dtr' = dtr { dtrFieldPath = t }
+  let hDtrt = case filter (null . dtrFieldPath) l of
+          [dtr] -> pure dtr
+          _ ->
+            throwError $ sformat ("_decodeList: invalid top with "%sh) l
+  let withHeads = concatMap f l
+  let g = myGroupBy withHeads
+  let groupst = (M.toList g) <&> \(h, l') ->
+         _sToTreeRepr l' <&> \(idx, dt) -> (idx, StructField (FieldName h) dt)
+  groups <- sequence groupst
+  checkedGroups <- _packWithIndex groups
+  hDtr <- hDtrt
+  _decodeLeaf hDtr checkedGroups
+
+_packWithIndex :: (Show t) => [(Int, t)] -> TryS [t]
+_packWithIndex l = _check $ sortBy (compare `on` fst) l
+
+_check :: (Show t) => [(Int, t)] -> TryS [t]
+_check [] = pure []
+_check [(0, x)] = pure [x]
+_check [(p, x)] = throwError $ sformat ("_check: should be zero "%sh) (p, x)
+_check ((idx1, x1) : (idx2, x2) : t) =
+  if idx1 == idx2 + 1
+  then (x1 : ) <$> _check ((idx2, x2) : t)
+  else
+    throwError $ sformat ("_check: could not match arguments for "%sh) ((idx1, x1) : (idx2, x2) : t)
+
+
+_decodeLeaf :: DataTypeRepr -> [StructField] -> TryS (Int, DataType)
+_decodeLeaf dtr l = _decodeLeafStrict dtr l <&> \sdt ->
+  if dtrIsNullable dtr
+  then (dtrFieldIndex dtr, NullableType sdt)
+  else (dtrFieldIndex dtr, StrictType sdt)
+
+_decodeLeafStrict :: DataTypeRepr -> [StructField] -> TryS StrictDataType
+-- The array type
+_decodeLeafStrict dtr [sf] | dtrTypeId dtr == 11 =
+  pure $ ArrayType (structFieldType sf)
+-- Structure types
+_decodeLeafStrict dtr l | dtrTypeId dtr == 10 =
+  pure . Struct . StructType . V.fromList $ l
+_decodeLeafStrict dtr [] =  case dtrTypeId dtr of
+        0 -> pure IntType
+        1 -> pure StringType
+        2 -> pure BoolType
+        n -> throwError $ sformat ("_decodeLeafStrict: unknown type magic id "%sh) n
+_decodeLeafStrict dtr l =
+  throwError $ sformat ("_decodeLeafStrict: cannot interpret dtr="%sh%" and fields="%sh) dtr l
 
 _compatibleTypesStrict :: StrictDataType -> StrictDataType -> Bool
 _compatibleTypesStrict IntType IntType = True

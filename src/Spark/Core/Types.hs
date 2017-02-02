@@ -22,7 +22,8 @@ module Spark.Core.Types(
   StructField,
   StructType,
   -- castType,
-  catNodePath
+  catNodePath,
+  unSQLType
 ) where
 
 import Spark.Core.Internal.TypesStructures

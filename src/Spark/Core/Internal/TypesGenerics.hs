@@ -60,6 +60,15 @@ instance SQLTypeable Int where
 instance SQLTypeable T.Text where
   _genericTypeFromValue _ = StrictType StringType
 
+instance SQLTypeable Bool where
+  _genericTypeFromValue _ = StrictType BoolType
+
+instance SQLTypeable DataTypeRepr
+
+instance SQLTypeable DataType where
+  _genericTypeFromValue _ = _genericTypeFromValue (undefined :: DataTypeRepr)
+
+
 instance {-# INCOHERENT #-} SQLTypeable String where
   _genericTypeFromValue _ = StrictType StringType
 
@@ -71,6 +80,7 @@ instance {-# OVERLAPPABLE #-} SQLTypeable a => SQLTypeable [a] where
   _genericTypeFromValue _ =
     let SQLType dt = buildType :: (SQLType a) in
       (StrictType . ArrayType) dt
+
 
 instance forall a1 a2. (
     SQLTypeable a2,

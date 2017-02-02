@@ -34,6 +34,7 @@ import Spark.Core.Internal.Utilities
 data StrictDataType =
     IntType
   | StringType
+  | BoolType
   | Struct !StructType
   | ArrayType { elementType :: !DataType } deriving (Eq)
 
@@ -73,6 +74,16 @@ data SQLType a = SQLType {
   unSQLType :: !DataType
 } deriving (Eq, Generic)
 
+-- The inner representation of a dataype as a Row object.
+-- This representation is meant to be internal.
+-- Because the Spark data types do not support recursive types (trees),
+-- This is a flattened representation of types.
+data DataTypeRepr = DataTypeRepr {
+  dtrFieldPath :: ![T.Text],
+  dtrIsNullable :: !Bool,
+  dtrTypeId :: !Int,
+  dtrFieldIndex :: !Int
+} deriving (Eq, Show, Generic)
 
 instance Show DataType where
   show (StrictType x) = show x
@@ -132,6 +143,7 @@ instance Arbitrary DataType where
 instance ToJSON StrictDataType where
   toJSON IntType = "integer"
   toJSON StringType = "string"
+  toJSON BoolType = "bool"
   toJSON (Struct struct) = toJSON struct
   toJSON (ArrayType (StrictType dt)) =
     object [ "type" .= A.String "array"

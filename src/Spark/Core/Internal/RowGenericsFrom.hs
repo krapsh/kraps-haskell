@@ -14,7 +14,8 @@
 -- Going through JSON is not recommended because of precision loss
 -- for the numbers, and other issues related to numbers.
 module Spark.Core.Internal.RowGenericsFrom(
-  FromSQL,
+  FromSQL(_cellToValue),
+  TryS,
   cellToValue,
 ) where
 
@@ -27,6 +28,7 @@ import qualified Data.Vector as V
 
 import Spark.Core.Internal.RowStructures
 import Spark.Core.Internal.Utilities
+import Spark.Core.Internal.TypesStructures(DataTypeRepr)
 
 -- Convert a cell to a value (if possible)
 cellToValue :: (FromSQL a) => Cell -> Either Text a
@@ -65,6 +67,13 @@ instance FromSQL Text where
 
 instance FromSQL Cell where
   _cellToValue = pure
+
+instance FromSQL Bool where
+  _cellToValue (BoolElement b) = pure b
+  _cellToValue x = throwError $ sformat ("FromSQL: Decoding a boolean from "%shown) x
+
+instance FromSQL DataTypeRepr
+
 
 instance FromSQL a => FromSQL [a] where
   _cellToValue (RowArray xs) = sequence (_cellToValue <$> V.toList xs)
