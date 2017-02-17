@@ -1,20 +1,22 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Spark.Core.Internal.ContextIOInternal(
   returnPure,
   createSparkSession,
   createSparkSession',
   executeCommand1,
-  executeCommand1'
+  executeCommand1',
+  checkDataStamps
 ) where
 
 import Control.Concurrent(threadDelay)
 import Control.Lens((^.))
 import Control.Monad.State(mapStateT, get)
 import Control.Monad(forM)
-import Data.Aeson(toJSON)
+import Data.Aeson(toJSON, FromJSON)
 import Data.Functor.Identity(runIdentity)
 import Data.Text(Text, pack)
 import qualified Data.Text as T
@@ -24,7 +26,9 @@ import Control.Monad.Trans(lift)
 import Control.Monad.Logger(runStdoutLoggingT, LoggingT, logDebugN, logInfoN, MonadLoggerIO)
 import System.Random(randomIO)
 import Data.Word(Word8)
+import Data.Maybe(mapMaybe)
 import Control.Monad.IO.Class
+import GHC.Generics
 -- import Formatting
 import Network.Wreq.Types(Postable)
 import Data.ByteString.Lazy(ByteString)
@@ -104,6 +108,35 @@ executeCommand1' ld = do
           nrs <- nodeResults
           returnPure $ storeResults comp nrs
 
+data StampReturn = StampReturn {
+  stampReturnPath :: !Text,
+  stampReturnError :: !(Maybe Text),
+  stampReturn :: !(Maybe Text)
+} deriving (Eq, Show, Generic)
+
+instance FromJSON StampReturn
+
+{-| Given a list of paths, checks each of these paths on the file system of the
+given Spark cluster to infer the status of these resources.
+
+The primary role of this function is to check how recent these resources are
+compared to some previous usage.
+-}
+checkDataStamps :: [HdfsPath] -> SparkState [(HdfsPath, Try DataInputStamp)]
+checkDataStamps l = do
+  session <- get
+  let url = _sessionResourceCheck session
+  status <- liftIO (W.asJSON =<< W.post (T.unpack url) (toJSON l) :: IO (W.Response [StampReturn]))
+  let s = status ^. responseBody
+  return $ mapMaybe _parseStamp s
+
+
+_parseStamp :: StampReturn -> Maybe (HdfsPath, Try DataInputStamp)
+_parseStamp sr = case (stampReturn sr, stampReturnError sr) of
+  (Just s, _) -> pure (HdfsPath (stampReturnPath sr), pure (DataInputStamp s))
+  (Nothing, Just err) -> pure (HdfsPath (stampReturnPath sr), tryError err)
+  _ -> Nothing -- No error being returned for now, we just discard it.
+
 _randomSessionName :: IO Text
 _randomSessionName = do
   ws <- forM [1..10] (\(_::Int) -> randomIO :: IO Word8)
@@ -143,15 +176,27 @@ _createSparkSession conf sessionId =
   SparkSession conf sid where
     sid = LocalSessionId sessionId
 
+_port :: SparkSession -> Text
+_port = pack . show . confPort . ssConf
+
 -- The URL of the end point
 _sessionEndPoint :: SparkSession -> Text
 _sessionEndPoint sess =
-  let port = (pack . show . confPort . ssConf) sess
+  let port = _port sess
       sid = (unLocalSession . ssId) sess
   in
     T.concat [
       (confEndPoint . ssConf) sess, ":", port,
-      "/session/", sid]
+      "/sessions/", sid]
+
+_sessionResourceCheck :: SparkSession -> Text
+_sessionResourceCheck sess =
+  let port = _port sess
+      sid = (unLocalSession . ssId) sess
+  in
+    T.concat [
+      (confEndPoint . ssConf) sess, ":", port,
+      "/resources_status/", sid]
 
 _sessionPortText :: SparkSession -> Text
 _sessionPortText = pack . show . confPort . ssConf
@@ -165,7 +210,7 @@ _compEndPoint sess compId =
   in
     T.concat [
       (confEndPoint . ssConf) sess, ":", port,
-      "/computation/", sid, "/", cid]
+      "/computations/", sid, "/", cid]
 
 -- The URL of the status of a computation
 _compEndPointStatus :: SparkSession -> ComputationID -> Text
@@ -176,7 +221,7 @@ _compEndPointStatus sess compId =
   in
     T.concat [
       (confEndPoint . ssConf) sess, ":", port,
-      "/status/", sid, "/", cid]
+      "/computations_status/", sid, "/", cid]
 
 -- Ensures that the server has instantiated a session with the given ID.
 _ensureSession :: (MonadLoggerIO m) => SparkSession -> m ()

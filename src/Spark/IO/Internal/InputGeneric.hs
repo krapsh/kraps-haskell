@@ -6,7 +6,7 @@ module Spark.IO.Internal.InputGeneric(
   DataSchema(..),
   InputOptionValue(..),
   InputOptionKey(..),
-  InputSource(..),
+  DataFormat(..),
   SourceDescription(..),
   generic',
   genericWithSchema',
@@ -14,19 +14,23 @@ module Spark.IO.Internal.InputGeneric(
 ) where
 
 import Data.Text(Text)
+import Data.String(IsString(..))
 import qualified Data.Map.Strict as M
 import qualified Data.Aeson as A
+import qualified Data.Text as T
 import Data.Aeson(toJSON, (.=))
+import Debug.Trace
 
 import Spark.Core.Types
 import Spark.Core.Context
 import Spark.Core.Try
 import Spark.Core.Dataset
 
-import Spark.Core.Internal.Utilities(forceRight)
+import Spark.Core.Internal.Utilities(forceRight, traceHint)
 import Spark.Core.Internal.DatasetFunctions(asDF, emptyDataset, emptyLocalData)
 import Spark.Core.Internal.TypesStructures(SQLType(..))
 import Spark.Core.Internal.OpStructures
+import Spark.Core.Internal.ContextStructures(DataInputStamp(..))
 
 {-| A path to some data that can be read by Spark.
 -}
@@ -45,6 +49,7 @@ data InputOptionValue =
   | InputDoubleOption Double
   | InputStringOption Text
   | InputBooleanOption Bool
+  deriving (Eq, Show)
 
 instance A.ToJSON InputOptionValue where
   toJSON (InputIntOption i) = toJSON i
@@ -55,8 +60,18 @@ instance A.ToJSON InputOptionValue where
 newtype InputOptionKey = InputOptionKey { unInputOptionKey :: Text } deriving (Eq, Show, Ord)
 
 {-| The type of the source.
+
+This enumeration contains all the data formats that are natively supported by
+Spark, either for input or for output, and allows the users to express their
+own format if requested.
 -}
-data InputSource = JsonSource | TextSource | CsvSource | InputSource SparkPath
+data DataFormat =
+    JsonFormat
+  | TextFormat
+  | CsvFormat
+  | CustomSourceFormat !Text
+  deriving (Eq, Show)
+-- data InputSource = JsonSource | TextSource | CsvSource | InputSource SparkPath
 
 {-| A description of a data source, following Spark's reader API version 2.
 
@@ -68,10 +83,14 @@ for each of the most popular sources that are already built into Spark.
 -}
 data SourceDescription = SourceDescription {
   inputPath :: !SparkPath,
-  inputSource :: !InputSource,
+  inputSource :: !DataFormat,
   inputSchema :: !DataSchema,
-  sdOptions :: !(M.Map InputOptionKey InputOptionValue)
-}
+  sdOptions :: !(M.Map InputOptionKey InputOptionValue),
+  inputStamp :: !(Maybe DataInputStamp)
+} deriving (Eq, Show)
+
+instance IsString SparkPath where
+  fromString = SparkPath . T.pack
 
 {-| Generates a dataframe from a source description.
 
@@ -121,9 +140,9 @@ _inferSchema = executeCommand1 . _inferSchemaCmd
 -- aggregator.
 _inferSchemaCmd :: SourceDescription -> LocalData DataType
 _inferSchemaCmd sd = emptyLocalData no sqlt where
-  sqlt = buildType :: SQLType DataType
-  dt = unSQLType sqlt
-  so = StandardOperator {
+  sqlt = traceHint "_inferSchemaCmd: sqlt" $ buildType :: SQLType DataType
+  dt = traceHint "_inferSchemaCmd: dt" $ unSQLType sqlt
+  so = traceHint "_inferSchemaCmd: so" $ StandardOperator {
       soName = "org.spark.InferSchema",
       soOutputType = dt,
       soExtra = A.toJSON sd
@@ -137,11 +156,11 @@ instance A.ToJSON DataSchema where
   toJSON InferSchema = "infer_schema"
   toJSON (UseSchema dt) = toJSON dt
 
-instance A.ToJSON InputSource where
-  toJSON JsonSource = "json"
-  toJSON TextSource = "text"
-  toJSON CsvSource = "csv"
-  toJSON (InputSource s) = toJSON s
+instance A.ToJSON DataFormat where
+  toJSON JsonFormat = "json"
+  toJSON TextFormat = "text"
+  toJSON CsvFormat = "csv"
+  toJSON (CustomSourceFormat s) = toJSON s
 
 instance A.ToJSON SourceDescription where
   toJSON sd = A.object [

@@ -15,7 +15,8 @@ module Spark.Core.Internal.ContextInteractive(
   createSparkSessionDef,
   exec1Def,
   exec1Def',
-  closeSparkSessionDef
+  closeSparkSessionDef,
+  execStateDef
 ) where
 
 import qualified Data.Vector as V
@@ -83,28 +84,25 @@ throws an exception if any error happens.
 exec1Def :: (FromSQL a, HasCallStack) => LocalData a -> IO a
 exec1Def ld = do
   c <- exec1Def' (pure (untypedLocalData ld))
-  case cellToValue c of
-    Right x -> return x
-    Left txt -> _throw txt
+  _forceEither $ cellToValue c
 
 exec1Def' :: (HasCallStack) => LocalFrame -> IO Cell
 exec1Def' lf = do
-  mCtx <- _currentSession
-  case mCtx of
-    Nothing ->
-      _throw "No default context found. You must first create a default spark context with createSparkSessionDef"
-    Just ctx ->
-      case lf of
-        Left err ->
-          throwM (SparkInteractiveException err)
-        Right ld -> do
-          (res, newSt) <- (runStateT . runStdoutLoggingT . executeCommand1') ld ctx
-          _setSession newSt
-          case res of
-            Right x ->
-              return x
-            Left err ->
-              throwM (SparkInteractiveException err)
+  ld <- _getOrThrow lf
+  res <- execStateDef (executeCommand1' ld)
+  _getOrThrow res
+
+{-| Runs the computation described in the state transform, using the default
+Spark session.
+
+Will throw an exception if no session currently exists.
+-}
+execStateDef :: SparkState a -> IO a
+execStateDef s = do
+  ctx <- _currentSessionOrThrow
+  (res, newSt) <- (runStateT . runStdoutLoggingT) s ctx
+  _setSession newSt
+  return res
 
 {-| Closes the default session. The default session is empty after this call
 completes.
@@ -128,6 +126,22 @@ _removeSession = do
   current <- _currentSession
   _ <- writeIORef _globalSessionRef Nothing
   return current
+
+_currentSessionOrThrow :: IO SparkSession
+_currentSessionOrThrow = do
+  mCtx <- _currentSession
+  case mCtx of
+    Nothing ->
+      _throw "No default context found. You must first create a default spark context with createSparkSessionDef"
+    Just ctx -> return ctx
+
+
+_getOrThrow :: Try a -> IO a
+_getOrThrow (Right x) = return x
+_getOrThrow (Left err) = throwM (SparkInteractiveException err)
+
+_forceEither :: Either Text a -> IO a
+_forceEither = _getOrThrow . tryEither
 
 _throw :: Text -> IO a
 _throw txt = throwM $

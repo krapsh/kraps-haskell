@@ -6,7 +6,8 @@ module Spark.IO.Inputs(
   JsonOptions,
   SourceDescription,
   json',
-  json
+  json,
+  jsonInfer
 ) where
 
 import Spark.IO.Internal.Json

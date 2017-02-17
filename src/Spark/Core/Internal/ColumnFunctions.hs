@@ -22,6 +22,7 @@ module Spark.Core.Internal.ColumnFunctions(
   unsafeStaticProjection,
   dynamicProjection,
   dropColReference,
+  dropColType,
   -- Public functions
   untypedCol,
   colFromObs,
@@ -90,7 +91,12 @@ colType = SQLType . _cType
 {-| Converts a type column to an antyped column.
 -}
 untypedCol :: Column ref a -> DynColumn
-untypedCol = pure . _unsafeCastColData . dropColReference
+untypedCol = pure . dropColType . dropColReference
+
+{-| Drops the type information, but kees the reference.
+-}
+dropColType :: Column ref a -> GenericColumn ref
+dropColType = _unsafeCastColData
 
 {-| Casts a dynamic column to a statically typed column.
 

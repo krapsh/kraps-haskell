@@ -89,7 +89,12 @@ extraNodeOpData (NodeAggregatorReduction ua) =
   case uaoInitialOuter ua of
     OpaqueAggTransform so -> toJSON (soExtra so)
     InnerAggOp ao -> toJSON ao
-extraNodeOpData _ = A.Null
+extraNodeOpData (NodeOpaqueAggregator so) = soExtra so
+extraNodeOpData (NodeLocalOp so) = soExtra so
+extraNodeOpData NodeBroadcastJoin = A.Null
+extraNodeOpData (NodeReduction _) = A.Null -- TODO: should it send something?
+extraNodeOpData (NodeAggregatorLocalReduction _) = A.Null -- TODO: should it send something?
+
 
 -- Adds the content of a node op to a hash.
 -- Right now, this builds the json representation and passes it

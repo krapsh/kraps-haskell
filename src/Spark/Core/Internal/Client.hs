@@ -6,7 +6,8 @@ module Spark.Core.Internal.Client where
 import Spark.Core.StructuresInternal
 import Spark.Core.Dataset(UntypedNode)
 import Spark.Core.Internal.Utilities
-
+import Spark.Core.Internal.TypesStructures(DataType)
+import Spark.Core.Internal.TypesFunctions()
 
 import Data.Text(Text, pack)
 import Data.Aeson
@@ -45,7 +46,9 @@ data PossibleNodeStatus =
 
 data NodeComputationSuccess = NodeComputationSuccess {
   -- Because Row requires additional information to be deserialized.
-  ncsData :: Value
+  ncsData :: Value,
+  -- The data type is also available, but it is not going to be parsed for now.
+  ncsDataType :: DataType
 } deriving (Show, Generic)
 
 data NodeComputationFailure = NodeComputationFailure {
@@ -91,8 +94,11 @@ instance ToJSON ComputationID where
 instance FromJSON PossibleNodeStatus where
   parseJSON =
     let parseSuccess :: Object -> Parser PossibleNodeStatus
-        parseSuccess o =
-          (NodeFinishedSuccess . NodeComputationSuccess) <$> o .: pack "finalResult"
+        parseSuccess o = do
+          res <- o .: pack "finalResult"
+          x <- res .: pack "content"
+          dt <- res .: pack "type"
+          return . NodeFinishedSuccess $ NodeComputationSuccess x dt
         parseFailure :: Object -> Parser PossibleNodeStatus
         parseFailure o =
           (NodeFinishedFailure . NodeComputationFailure) <$> o .: pack "finalError"

@@ -83,16 +83,19 @@ jsonOpt jo sp =
 
 defaultJsonOptions :: JsonOptions
 defaultJsonOptions = JsonOptions {
-  mode = Permissive,
+  -- Fail fast by default, to be conservative about errors,
+  -- and respect the strictness arguments.
+  mode = FailFast,
   jsonSchema = InferSchema
 }
 
 _jsonSourceDescription :: SparkPath -> JsonOptions -> SourceDescription
 _jsonSourceDescription sp jo = SourceDescription {
-  inputSource = JsonSource,
+  inputSource = JsonFormat,
   inputPath = sp,
   inputSchema = jsonSchema jo,
-  sdOptions = _jsonOptions jo
+  sdOptions = _jsonOptions jo,
+  inputStamp = Nothing
 }
 
 _jsonOptions :: JsonOptions -> M.Map InputOptionKey InputOptionValue

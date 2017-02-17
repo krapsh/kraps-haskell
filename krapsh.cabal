@@ -65,7 +65,8 @@ library
                        Spark.Core.Internal.RowStructures,
                        Spark.Core.Internal.RowUtils,
                        Spark.IO.Internal.InputGeneric,
-                       Spark.IO.Internal.Json
+                       Spark.IO.Internal.Json,
+                       Spark.IO.Internal.OutputCommon
   build-depends:       aeson,
                        aeson-pretty,
                        base >= 4.8.1 && < 5,
@@ -91,7 +92,7 @@ library
                        unordered-containers,
                        vector,
                        wreq
-  ghc-options:         -Wall
+  ghc-options:         -Wall -fhpc -O0
 --  ghc-options:         -fprof-auto --enable-library-profiling -O0 -- -ddump-deriv -O0 -rtsopts=all
   default-language:    Haskell2010
 
@@ -140,7 +141,8 @@ test-suite krapsh-test-integration
                        Spark.Core.IntegrationUtilities,
                        Spark.Core.JoinsSpec,
                        Spark.Core.SimpleAddSpec,
-                       Spark.IO.JsonSpec
+                       Spark.IO.JsonSpec,
+                       Spark.IO.StampSpec
   build-depends:       aeson
                      , base
                      , bytestring
@@ -152,7 +154,7 @@ test-suite krapsh-test-integration
                      , raw-strings-qq
                      , QuickCheck
                      , vector
-  ghc-options:         -fhpc -O0 -Wall
+  ghc-options:         -fhpc -O0 -Wall -rtsopts=all -auto-all
 --  ghc-options:         -ddump-deriv -O0 -rtsopts=all -prof -auto-all
   default-language:    Haskell2010
 

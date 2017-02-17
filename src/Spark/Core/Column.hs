@@ -10,6 +10,7 @@ module Spark.Core.Column(
   -- * Types
   Column,
   DynColumn,
+  GenericColumn,
   -- * Extractions and collations
   asCol,
   asCol',
@@ -26,6 +27,8 @@ module Spark.Core.Column(
   StaticColProjection,
   DynamicColProjection,
   unsafeStaticProjection,
+  -- * Column type manipulations
+  dropColType,
   -- * Column functions
   colType,
   untypedCol,

@@ -18,6 +18,7 @@ module Spark.Core.Internal.TypesStructures where
 
 import Data.Aeson
 import Data.Vector(Vector)
+import Control.Monad(guard)
 import qualified Data.Vector as V
 import qualified Data.Aeson as A
 import qualified Data.Text as T
@@ -36,7 +37,8 @@ data StrictDataType =
   | StringType
   | BoolType
   | Struct !StructType
-  | ArrayType { elementType :: !DataType } deriving (Eq)
+  | ArrayType !DataType
+  deriving (Eq)
 
 -- | All the data types supported by the Spark engine.
 -- The data types can either be nullable (they may contain null values) or strict (all the values are present).
@@ -92,8 +94,9 @@ instance Show DataType where
 instance Show StrictDataType where
   show StringType = "string"
   show IntType = "int"
+  show BoolType = "bool"
   show (Struct struct) = show struct
-  show array = "[" ++ show (elementType array) ++ "]"
+  show (ArrayType at) = "[" ++ show at ++ "]"
 
 instance Show StructField where
   show field = (T.unpack . unFieldName . structFieldName) field ++ ":" ++ s where
@@ -169,6 +172,50 @@ instance ToJSON DataType where
   toJSON (NullableType dt) = object [
     "nullable" .= A.Bool True,
     "dt" .= toJSON dt]
+
+instance FromJSON DataType where
+  parseJSON = withObject "DataType" $ \o -> do
+    nullable <- o .: "nullable"
+    dt <- o .: "dt"
+    let c = if nullable then NullableType else StrictType
+    return (c dt)
+
+instance FromJSON StructField where
+  parseJSON = withObject "StructField" $ \o -> do
+    n <- o .: "name"
+    dt <- o .: "type"
+    nullable <- o .: "nullable"
+    let c = if nullable then NullableType else StrictType
+    return $ StructField (FieldName n) (c dt)
+
+instance FromJSON StructType where
+  parseJSON = withObject "StructType" $ \o -> do
+    tp <- o .: "type"
+    guard (tp == T.pack "struct")
+    fs <- o .: "fields"
+    return (StructType fs)
+
+instance FromJSON StrictDataType where
+  parseJSON (A.String s) = case s of
+    "integer" -> return IntType
+    "string" -> return StringType
+    "bool" -> return BoolType
+    -- TODO: figure out which one is correct
+    "boolean" -> return BoolType
+    _ -> fail ("StrictDataType: unknown type " ++ T.unpack s)
+  parseJSON (Object o) = do
+    tp <- o .: "type"
+    case T.pack tp of
+      "struct" -> Struct <$> parseJSON (Object o)
+      "array" -> do
+        dt <- o .: "elementType"
+        containsNull <- o .: "containsNull"
+        let c = if containsNull then NullableType else StrictType
+        return $ ArrayType (c dt)
+      s -> fail ("StrictDataType: unknown type " ++ T.unpack s)
+
+  parseJSON x = fail ("StrictDataType: cannot parse " ++ show x)
+
 
 _fieldToJson :: StructField -> (T.Text, A.Value)
 _fieldToJson (StructField (FieldName n) (StrictType dt)) =

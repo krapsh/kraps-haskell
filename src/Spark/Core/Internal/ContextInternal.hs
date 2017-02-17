@@ -26,7 +26,6 @@ import Data.Foldable(toList)
 import Control.Arrow((&&&))
 import Formatting
 import qualified Data.Map.Strict as M
-import qualified Data.Vector as V
 
 import Spark.Core.Dataset
 import Spark.Core.Try
@@ -40,8 +39,6 @@ import Spark.Core.Internal.ComputeDag
 import Spark.Core.Internal.PathsUntyped
 -- Required to import the instances.
 import Spark.Core.Internal.Paths()
-import Spark.Core.Internal.TypesStructures
-import Spark.Core.Internal.TypesFunctions(arrayType)
 import Spark.Core.Internal.DAGFunctions(buildVertexList)
 import Spark.Core.Internal.DAGStructures
 import Spark.Core.Internal.DatasetFunctions
@@ -131,36 +128,10 @@ _increaseCompCounter = get >>= \session ->
 _gatherNodes :: LocalData a -> Try [UntypedNode]
 _gatherNodes = tryEither . buildVertexList . untyped
 
-_extractionType :: SQLType a -> SQLType [a]
-_extractionType = arrayType . SQLType . unSQLType
-
--- Like the type, remove the row wrapper in the case of basic elements
--- TODO(kps) figure out what the exact semantics are.
--- It seems collect is behaving differently than the other nodes.
-_postprocessBasic :: Cell -> Cell
-_postprocessBasic (RowArray rows) =
-  RowArray (process <$> rows)  where
-    process (RowArray arr) = case V.toList arr of
-       [IntElement x] -> IntElement x
-       [StringElement x] -> StringElement x
-       _ -> RowArray arr
-    process x = x
-_postprocessBasic x = x
-  --failure $ "Could not interpret this cell: " ++ show x
-
 -- Given a result, tries to build the corresponding object out of it
-_extract1 :: FinalResult -> SQLType Cell -> Try Cell
+_extract1 :: FinalResult -> DataType -> Try Cell
 _extract1 (Left nf) _ = tryError $ sformat ("got an error "%shown) nf
-_extract1 (Right ncs) sqlt = res0 where
-  -- Because of the Row semantics, all results are wrappend in a row.
-  -- We are using the equivalence between arrays and rows during decoding here.
-  wrappingType = _extractionType sqlt
-  trow = tryEither $ jsonToCell (unSQLType wrappingType) (ncsData ncs)
-  res = trow >>= \l -> case l of
-      RowArray arr | V.length arr == 1 -> Right $ _postprocessBasic (V.head arr)
-      x -> tryError $ sformat ("ContextInternal:_extract1: Expected on element, got "%shown) x
-  res0 = trace ("_extract1: wrappingType = " ++ show wrappingType ++ " ncs = " ++ show ncs ++ " res = " ++ show res) res
-
+_extract1 (Right ncs) dt = tryEither $ jsonToCell dt (ncsData ncs)
 
 -- Gets the relevant nodes for this computation from this spark session.
 -- The computation is assumed to be correct and to contain all the nodes
@@ -191,7 +162,7 @@ storeResults _ res =
     fun4 :: (LocalData Cell, FinalResult) -> Try Cell
     fun4 (node, fresult) =
       trace ("_storeResults node=" ++ show node ++ "final = " ++ show fresult) $
-        _extract1 fresult (nodeType node)
+        _extract1 fresult (unSQLType (nodeType node))
     allResults = sequence $ forM res fun4
     expResult = head allResults -- Just accessing the final result for now
   in

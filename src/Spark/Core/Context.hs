@@ -22,7 +22,8 @@ module Spark.Core.Context(
   createSparkSessionDef,
   closeSparkSessionDef,
   exec1Def,
-  exec1Def'
+  exec1Def',
+  execStateDef
   ) where
 
 import Data.Text(pack)
