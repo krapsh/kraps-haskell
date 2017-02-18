@@ -17,14 +17,14 @@ import Spark.Core.SimpleAddSpec(run)
 spec :: Spec
 spec = do
   describe "Read a json file" $ do
-    -- run "simple read" $ do
-    --   let dt = unSQLType (buildType :: SQLType TestStruct3)
-    --   let df = json' dt "/tmp/x.json"
-    --   let c = collect' (asCol' df)
-    --   c1 <- exec1Def' c
-    --   c1 `shouldBe` rowArray [rowArray [IntElement 3]]
+    run "simple read" $ do
+      let dt = unSQLType (buildType :: SQLType TestStruct7)
+      let df = json' dt "/tmp/x.json"
+      let c = collect' (asCol' df)
+      c1 <- exec1Def' c
+      c1 `shouldBe` rowArray [rowArray [StringElement "x"]]
     run "simple inference" $ do
       df <- execStateDef $ jsonInfer "/tmp/x.json"
       let c = collect' (asCol' df)
       c1 <- exec1Def' c
-      c1 `shouldBe` rowArray [rowArray [IntElement 3]]
+      c1 `shouldBe` rowArray [rowArray [StringElement "x"]]

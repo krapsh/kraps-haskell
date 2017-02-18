@@ -25,7 +25,6 @@ import Control.Applicative(liftA2)
 import Control.Monad.Except
 import Formatting
 import qualified Data.Vector as V
-import Debug.Trace(trace)
 
 import Spark.Core.Internal.RowStructures
 import Spark.Core.Internal.Utilities
@@ -58,7 +57,7 @@ class FromSQL a where
   default _cellToValue :: (Generic a, GFromSQL (Rep a)) => Cell -> TryS a
   _cellToValue cell = let
       x = undefined :: a
-      x1r = _gFcell (from x) (D2Normal cell) :: InterResult (Decode2, (Rep a a))
+      x1r = _gFcell (from x) (D2Normal cell) :: InterResult (Decode2, Rep a a)
       x2r = snd <$> x1r
       x1t = to <$> x2r
     in _toTry x1t
@@ -111,7 +110,7 @@ type InterResult a = Either FailureInfo a
 class GFromSQL r where
   -- An evidence about the type (in order to have info about the field names)
   -- The current stuff that has been decoded
-  _gFcell :: r a -> Decode2 -> InterResult (Decode2, (r a))
+  _gFcell :: r a -> Decode2 -> InterResult (Decode2, r a)
 
 _toTry :: InterResult a -> TryS a
 _toTry (Right x) = pure x
@@ -124,18 +123,11 @@ _fromTry (Left x) = Left $ FailureInfo x []
 instance GFromSQL U1 where
   _gFcell x = failure $ pack $ "GFromSQL UI called" ++ show x
 
-_f :: InterResult (f p) -> InterResult (g p) -> InterResult ((:*:) f g p)
-_f x1t x2t = do
-  x1 <- x1t
-  x2 <- x2t
-  return (x1 :*: x2)
-
 instance (GFromSQL a, GFromSQL b) => GFromSQL (a :*: b) where
   -- Switching to tape-reading mode
-  _gFcell ev (D2Normal (RowArray arr)) = trace ("GFromSQL (a :*: b)0: arr=" ++ show arr) $
-      _gFcell ev (D2Cons (V.toList arr))
+  _gFcell ev (D2Normal (RowArray arr)) = _gFcell ev (D2Cons (V.toList arr))
   -- Advancing into the reader
-  _gFcell ev (D2Cons l) = trace ("GFromSQL (a :*: b)1: arr=" ++ show l) $ do
+  _gFcell ev (D2Cons l) = do
     let (ev1 :*: ev2) = ev
     (d1, x1) <- _gFcell ev1 (D2Cons l)
     (d2, x2) <- _gFcell ev2 d1
@@ -148,36 +140,24 @@ instance (GFromSQL a, GFromSQL b) => GFromSQL (a :+: b) where
 
 instance (GFromSQL a, Constructor c) => GFromSQL (M1 C c a) where
   _gFcell _ (D2Cons x) = failure $ pack ("GFromSQL (M1 C c a)" ++ " FAILED CONS: " ++ show x)
-  _gFcell ev (D2Normal cell) = trace ("_m1:" ++ "GFromSQL (M1 C c a)" ++ ": " ++ show cell) $ do
+  _gFcell ev (D2Normal cell) = do
     let ev' = unM1 ev
     (d, x) <- _withHint (pack (conName ev)) $ _gFcell ev' (D2Normal cell)
     return (d, M1 x)
 
 instance (GFromSQL a, Selector c) => GFromSQL (M1 S c a) where
-  _gFcell ev (D2Normal (RowArray arr))= trace ("GFromSQL (M1 S c a)1 : arr=" ++ show arr) $ do
+  _gFcell ev (D2Normal (RowArray arr)) = do
     let ev' = unM1 ev
     let l = V.toList arr
     (d, x) <- _withHint ("(1)" <> pack (selName ev)) $ _gFcell ev' (D2Cons l)
     return (d, M1 x)
-    --
-    --
-    --     cell = V.head arr
-    --
-    -- in M1 <$> xt
-    -- M1 <$> _gFcell (D2Cons [cell]) where
-    --   cell = V.head arr
-  _gFcell ev d = trace ("_m1:GFromSQL (M1 S c a): " ++ show d) $ do
+  _gFcell ev d = do
     let ev' = unM1 ev
     (d', x) <- _withHint ("(2)" <> pack (selName ev)) $ _gFcell ev' d
     return (d', M1 x)
-  -- _gFcell ev (z @ (D2Cons [_])) = trace ("GFromSQL (M1 S c a)2 : z=" ++ show z) $
-  --   let ev' = unM1 ev
-  --       xt = _withHint ("(3)" <> pack (selName ev)) $ _gFcell ev' z
-  --   in M1 <$> xt
-  -- _gFcell _ (D2Cons x) = failure $ pack ("GFromSQL (M1 S c a) FAILED CONS: " ++ show x)
 
 instance (GFromSQL a, Datatype c) => GFromSQL (M1 D c a) where
-  _gFcell ev (z @ (D2Normal (RowArray _))) = trace ("GFromSQL (M1 D c a) : z=" ++ show z) $ do
+  _gFcell ev (z @ (D2Normal (RowArray _))) = do
     let ev' = unM1 ev
     (d, x) <- _gFcell ev' z
     return (d, M1 x)
@@ -187,10 +167,11 @@ instance (GFromSQL a, Datatype c) => GFromSQL (M1 D c a) where
 instance (FromSQL a) => GFromSQL (K1 i a) where
   -- It is just a normal cell.
   -- Read one element and move on.
-  _gFcell _ (D2Cons (cell : r)) = trace ("GFromSQL (K1 i a)C : cell=" ++ show (cell : r)) $ do
+  _gFcell _ (D2Cons (cell : r)) = do
     x <- _fromTry $ _cellToValue cell
     return (D2Cons r, K1 x)
-  _gFcell _ (D2Normal cell) = trace ("GFromSQL (K1 i a)N : cell=" ++ show cell) $ do
+  -- Just reading a normal cell, return no tape.
+  _gFcell _ (D2Normal cell) = do
     x <- _fromTry $ _cellToValue cell
     return (D2Cons [], K1 x)
   _gFcell _ x = failure $ pack ("GFromSQLK FAIL " ++ show x)

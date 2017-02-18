@@ -22,22 +22,21 @@ module Spark.Core.Internal.TypesFunctions(
   -- cellType,
 ) where
 
-import qualified Data.Text as T
-import Data.List(sort, nub, sortBy)
 import Control.Monad((>=>))
-import Data.Function(on)
-import Debug.Trace(trace)
-import qualified Data.Vector as V
-import Data.Text(Text, intercalate)
-import qualified Data.Map.Strict as M
 import Control.Monad.Except
+import Control.Arrow(second)
+import Data.Function(on)
+import Data.List(sort, nub, sortBy)
+import qualified Data.Map.Strict as M
+import qualified Data.Text as T
+import Data.Text(Text, intercalate)
+import qualified Data.Vector as V
 import Formatting
 
 
 import Spark.Core.Internal.TypesStructures
 import Spark.Core.StructuresInternal
 import Spark.Core.Internal.RowGenericsFrom(FromSQL(..), TryS)
-import Spark.Core.Internal.RowStructures
 import Spark.Core.Internal.Utilities
 import Spark.Core.Internal.TypesStructuresRepr(DataTypeRepr, DataTypeElementRepr)
 import qualified Spark.Core.Internal.TypesStructuresRepr as DTR
@@ -94,26 +93,15 @@ compatibleTypes _ _ = False
 
 -- ***** INSTANCES *****
 
-_x :: Int -> Cell -> Cell
-_x 0 x = x
-_x n (RowArray v) = _x (n-1) (V.head v)
-
 -- In the case of source introspection, datatypes may be returned.
 instance FromSQL DataType where
-  _cellToValue c = trace ("FromSQL DataType: c=" ++ show c) $
-    let x = traceHint "FromSQL DataType: x:" $ _x 2 c
-        x1t = traceHint ("FromSQL DataType: x1t:") $ _cellToValue x :: TryS DataTypeElementRepr
-    in do
-      x1 <- x1t
-      (_, x2) <- _sToTreeRepr [x1]
-      return x2
-  -- _cellToValue = _cellToValue >=> _sDataTypeFromRepr
+  _cellToValue = _cellToValue >=> _sDataTypeFromRepr
 
 _sDataTypeFromRepr :: DataTypeRepr -> TryS DataType
 _sDataTypeFromRepr (DTR.DataTypeRepr l) = snd <$> _sToTreeRepr l
 
 _sToTreeRepr :: [DataTypeElementRepr] -> TryS (Int, DataType)
-_sToTreeRepr [] = throwError $ sformat ("_sToTreeRepr: empty list")
+_sToTreeRepr [] = throwError $ sformat "_sToTreeRepr: empty list"
 _sToTreeRepr [dtr] | null (DTR.fieldPath dtr) =
   -- We are at a leaf, decode the leaf
   _decodeLeaf dtr []
@@ -127,8 +115,8 @@ _sToTreeRepr l = do
             throwError $ sformat ("_decodeList: invalid top with "%sh) l
   let withHeads = concatMap f l
   let g = myGroupBy withHeads
-  let groupst = (M.toList g) <&> \(h, l') ->
-         _sToTreeRepr l' <&> \(idx, dt) -> (idx, StructField (FieldName h) dt)
+  let groupst = M.toList g <&> \(h, l') ->
+         _sToTreeRepr l' <&> second (StructField (FieldName h))
   groups <- sequence groupst
   checkedGroups <- _packWithIndex groups
   hDtr <- hDtrt
@@ -233,9 +221,6 @@ structTypeFromFields ((hfn, hdt):t) =
   in if numNames == numDistincts
     then return ct
     else tryError $ sformat ("Duplicate field names when building the struct: "%sh) (sort names)
-
-
-
 
 _structFromUnfields :: [(T.Text, DataType)] -> StructType
 _structFromUnfields l = StructType . V.fromList $ x where
