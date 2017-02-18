@@ -20,6 +20,7 @@ import Spark.Core.Internal.TypesStructures
 import Spark.Core.Internal.TypesFunctions
 import Spark.Core.Internal.Utilities
 import Spark.Core.StructuresInternal(FieldName(..), unsafeFieldName)
+import Spark.Core.Internal.TypesStructuresRepr(DataTypeRepr, DataTypeElementRepr)
 
 -- The 3rd attempt to get generics conversions.
 
@@ -64,6 +65,7 @@ instance SQLTypeable Bool where
   _genericTypeFromValue _ = StrictType BoolType
 
 instance SQLTypeable DataTypeRepr
+instance SQLTypeable DataTypeElementRepr
 
 instance SQLTypeable DataType where
   _genericTypeFromValue _ = _genericTypeFromValue (undefined :: DataTypeRepr)

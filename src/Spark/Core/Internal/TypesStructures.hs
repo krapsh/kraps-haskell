@@ -28,7 +28,6 @@ import Test.QuickCheck
 import Spark.Core.StructuresInternal(FieldName(..))
 import Spark.Core.Internal.Utilities
 
-
 -- The core type algebra
 
 -- | The data types that are guaranteed to not be null: evaluating them will return a value.
@@ -76,16 +75,6 @@ data SQLType a = SQLType {
   unSQLType :: !DataType
 } deriving (Eq, Generic)
 
--- The inner representation of a dataype as a Row object.
--- This representation is meant to be internal.
--- Because the Spark data types do not support recursive types (trees),
--- This is a flattened representation of types.
-data DataTypeRepr = DataTypeRepr {
-  dtrFieldPath :: ![T.Text],
-  dtrIsNullable :: !Bool,
-  dtrTypeId :: !Int,
-  dtrFieldIndex :: !Int
-} deriving (Eq, Show, Generic)
 
 instance Show DataType where
   show (StrictType x) = show x

@@ -408,11 +408,11 @@ nodeOpToFun2Untyped dt no node1 node2 =
 -- Put here because it depends on some private functions.
 instance forall loc a. Show (ComputeNode loc a) where
   show ld = let
-    txt = fromString "{}@{}{}{{}}" :: TF.Format
+    txt = fromString "{}@{}{}{}" :: TF.Format
     loc :: T.Text
     loc = case nodeLocality ld of
       TypedLocality Local -> "!"
-      TypedLocality Distributed -> ""
+      TypedLocality Distributed -> ":"
     nn = unNodeName . nodeName $ ld
     no = simpleShowOp . nodeOp $ ld
     fields = T.pack . show . nodeType $ ld in

@@ -26,6 +26,7 @@ import qualified Data.Text as T
 import Data.List(sort, nub, sortBy)
 import Control.Monad((>=>))
 import Data.Function(on)
+import Debug.Trace(trace)
 import qualified Data.Vector as V
 import Data.Text(Text, intercalate)
 import qualified Data.Map.Strict as M
@@ -36,7 +37,10 @@ import Formatting
 import Spark.Core.Internal.TypesStructures
 import Spark.Core.StructuresInternal
 import Spark.Core.Internal.RowGenericsFrom(FromSQL(..), TryS)
+import Spark.Core.Internal.RowStructures
 import Spark.Core.Internal.Utilities
+import Spark.Core.Internal.TypesStructuresRepr(DataTypeRepr, DataTypeElementRepr)
+import qualified Spark.Core.Internal.TypesStructuresRepr as DTR
 import Spark.Core.Try
 
 -- Performs a cast of the type.
@@ -90,23 +94,34 @@ compatibleTypes _ _ = False
 
 -- ***** INSTANCES *****
 
+_x :: Int -> Cell -> Cell
+_x 0 x = x
+_x n (RowArray v) = _x (n-1) (V.head v)
+
 -- In the case of source introspection, datatypes may be returned.
 instance FromSQL DataType where
-  _cellToValue = _cellToValue >=> _sDataTypeFromRepr
+  _cellToValue c = trace ("FromSQL DataType: c=" ++ show c) $
+    let x = traceHint "FromSQL DataType: x:" $ _x 2 c
+        x1t = traceHint ("FromSQL DataType: x1t:") $ _cellToValue x :: TryS DataTypeElementRepr
+    in do
+      x1 <- x1t
+      (_, x2) <- _sToTreeRepr [x1]
+      return x2
+  -- _cellToValue = _cellToValue >=> _sDataTypeFromRepr
 
-_sDataTypeFromRepr :: [DataTypeRepr] -> TryS DataType
-_sDataTypeFromRepr l = snd <$> _sToTreeRepr l
+_sDataTypeFromRepr :: DataTypeRepr -> TryS DataType
+_sDataTypeFromRepr (DTR.DataTypeRepr l) = snd <$> _sToTreeRepr l
 
-_sToTreeRepr :: [DataTypeRepr] -> TryS (Int, DataType)
+_sToTreeRepr :: [DataTypeElementRepr] -> TryS (Int, DataType)
 _sToTreeRepr [] = throwError $ sformat ("_sToTreeRepr: empty list")
-_sToTreeRepr [dtr] | null (dtrFieldPath dtr) =
+_sToTreeRepr [dtr] | null (DTR.fieldPath dtr) =
   -- We are at a leaf, decode the leaf
   _decodeLeaf dtr []
 _sToTreeRepr l = do
-  let f dtr = case dtrFieldPath dtr of
+  let f dtr = case DTR.fieldPath dtr of
                 [] -> []
-                (h : t) -> [(h, dtr')] where dtr' = dtr { dtrFieldPath = t }
-  let hDtrt = case filter (null . dtrFieldPath) l of
+                (h : t) -> [(h, dtr')] where dtr' = dtr { DTR.fieldPath = t }
+  let hDtrt = case filter (null . DTR.fieldPath) l of
           [dtr] -> pure dtr
           _ ->
             throwError $ sformat ("_decodeList: invalid top with "%sh) l
@@ -133,20 +148,20 @@ _check ((idx1, x1) : (idx2, x2) : t) =
     throwError $ sformat ("_check: could not match arguments for "%sh) ((idx1, x1) : (idx2, x2) : t)
 
 
-_decodeLeaf :: DataTypeRepr -> [StructField] -> TryS (Int, DataType)
+_decodeLeaf :: DataTypeElementRepr -> [StructField] -> TryS (Int, DataType)
 _decodeLeaf dtr l = _decodeLeafStrict dtr l <&> \sdt ->
-  if dtrIsNullable dtr
-  then (dtrFieldIndex dtr, NullableType sdt)
-  else (dtrFieldIndex dtr, StrictType sdt)
+  if DTR.isNullable dtr
+  then (DTR.fieldIndex dtr, NullableType sdt)
+  else (DTR.fieldIndex dtr, StrictType sdt)
 
-_decodeLeafStrict :: DataTypeRepr -> [StructField] -> TryS StrictDataType
+_decodeLeafStrict :: DataTypeElementRepr -> [StructField] -> TryS StrictDataType
 -- The array type
-_decodeLeafStrict dtr [sf] | dtrTypeId dtr == 11 =
+_decodeLeafStrict dtr [sf] | DTR.typeId dtr == 11 =
   pure $ ArrayType (structFieldType sf)
 -- Structure types
-_decodeLeafStrict dtr l | dtrTypeId dtr == 10 =
+_decodeLeafStrict dtr l | DTR.typeId dtr == 10 =
   pure . Struct . StructType . V.fromList $ l
-_decodeLeafStrict dtr [] =  case dtrTypeId dtr of
+_decodeLeafStrict dtr [] =  case DTR.typeId dtr of
         0 -> pure IntType
         1 -> pure StringType
         2 -> pure BoolType
