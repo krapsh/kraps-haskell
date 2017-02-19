@@ -15,7 +15,7 @@ module Spark.Core.Internal.ContextIOInternal(
 import Control.Concurrent(threadDelay)
 import Control.Lens((^.))
 import Control.Monad.State(mapStateT, get)
-import Control.Monad(forM)
+import Control.Monad(forM, forM_)
 import Data.Aeson(toJSON, FromJSON)
 import Data.Functor.Identity(runIdentity)
 import Data.Text(Text, pack)
@@ -33,17 +33,19 @@ import GHC.Generics
 import Network.Wreq.Types(Postable)
 import Data.ByteString.Lazy(ByteString)
 import qualified Data.HashMap.Strict as HM
+import qualified Data.HashSet as HS
 
 import Spark.Core.Dataset
 import Spark.Core.Internal.Client
 import Spark.Core.Internal.ContextInternal
 import Spark.Core.Internal.ContextStructures
-import Spark.Core.Internal.DatasetFunctions(untypedLocalData)
+import Spark.Core.Internal.DatasetFunctions(untypedLocalData, nodePath)
 import Spark.Core.Internal.DatasetStructures(UntypedLocalData)
 import Spark.Core.Internal.OpStructures(DataInputStamp(..))
 import Spark.Core.Row
 import Spark.Core.StructuresInternal
 import Spark.Core.Try
+import Spark.Core.Types
 import Spark.Core.Internal.Utilities
 
 returnPure :: forall a. SparkStatePure a -> SparkState a
@@ -82,15 +84,16 @@ If any failure is detected that is internal to Krapsh, it returns an error.
 If the error comes from an underlying library (http stack, programming failure),
 an exception may be thrown instead.
 -}
-executeCommand1 :: forall a. (FromSQL a, HasCallStack) =>
+executeCommand1 :: forall a. (FromSQL a) =>
   LocalData a -> SparkState (Try a)
 executeCommand1 ld = do
     tcell <- executeCommand1' (untypedLocalData ld)
     return $ tcell >>= (tryEither . cellToValue)
 
 -- The main function to launch computations.
-executeCommand1' :: (HasCallStack) => UntypedLocalData -> SparkState (Try Cell)
+executeCommand1' :: UntypedLocalData -> SparkState (Try Cell)
 executeCommand1' ld = do
+  logDebugN $ "executeCommand1: computing observable " <> show' ld
   -- Retrieve the computation graph
   let cgt = buildComputationGraph ld
   _ret cgt $ \cg -> do
@@ -107,16 +110,23 @@ executeCommand1' ld = do
       compt <- returnPure $ prepareComputation stamps cg
       _ret compt $ \comp -> do
         -- Run the computation.
-        let obss = getTargetNodes comp
+        -- We track all the observables, instead of simply the targets.
+        let obss = getObservables comp
         session <- get
-        -- Main loop to wait on the results.
-        let fun3 ld2 = do
-              result <- _waitSingleComputation session comp (nodeName ld2)
-              return (ld2, result)
-        let nodeResults = sequence (fun3 <$> obss) :: SparkState [(LocalData Cell, FinalResult)]
         _ <- _sendComputation session comp
-        nrs <- nodeResults
-        returnPure $ storeResults comp nrs
+        -- TODO: remove the node name, it is not a good piece of info
+        let trackedNodes = obss <&> \n -> (nodeId n, nodePath n, unSQLType (nodeType n), nodeName n)
+        logDebugN $ "executeCommand1: Tracked nodes are " <> show' trackedNodes
+        nrs' <- _computationMultiStatus (cId comp) trackedNodes
+        -- Find the main result again in the list of everything.
+        -- TODO: we actually do not need all the results, just target nodes.
+        let targetNid = case cTerminalNodeIds comp of
+              [nid] -> nid
+              -- TODO: handle the case of multiple terminal targets
+              l -> missing $ "executeCommand1': missing multilist case with " <> show' l
+        case filter (\z -> fst z == targetNid) nrs' of
+          [(_, tc)] -> return tc
+          l -> return $ tryError $ "Expected single result, got " <> show' l
 
 _ret :: Try a -> (a -> SparkState (Try b)) -> SparkState (Try b)
 _ret (Left x) _ = return (Left x)
@@ -265,37 +275,59 @@ _computationStatus session compId nname = do
   let base' = _compEndPointStatus session compId
   let rest = unNodeName nname
   let url = base' <> "/" <> rest
-  logDebugN $ "Sending computations status request at url: " <> url
+  -- logDebugN $ "Sending computations status request at url: " <> url
   _ <- _get url
   -- raw <- _get url
   --logDebugN $ sformat ("Got raw status: "%sh) raw
   status <- liftIO (W.asJSON =<< W.get (T.unpack url) :: IO (W.Response PossibleNodeStatus))
   --logDebugN $ sformat ("Got status: "%sh) status
   let s = status ^. responseBody
-  case s of
-    NodeFinishedSuccess _ -> logInfoN $ rest <> " finished: success"
-    NodeFinishedFailure _ -> logInfoN $ rest <> " finished: failure"
-    _ -> return ()
   return s
 
-_computationMultiStatus :: ComputationID -> [(NodeId, NodeName)] -> SparkState [FinalResult]
+-- TODO: not sure how this works when trying to make a fix point: is it going to
+-- blow up the 'stack'?
+_computationMultiStatus :: ComputationID -> [(NodeId, NodePath, DataType, NodeName)] -> SparkState [(NodeId, Try Cell)]
 _computationMultiStatus _ [] = return []
 _computationMultiStatus cid l = do
+  -- logDebugN $ "_computationMultiStatus: tracking " <> show' l
   session <- get
-  -- Find the nodes that still need processing
-  let f (nid, _) = case HM.lookup nid (ssNodeCache session) of
+  -- Find the nodes that still need processing (i.e. that have not previously
+  -- finished with a success)
+  let f (nid, _, _, _) = not $ case HM.lookup nid (ssNodeCache session) of
             Just nci -> nciStatus nci == NodeCacheSuccess
             _ -> False
   let needsProcessing = filter f l
+  -- logDebugN $ "_computationMultiStatus: needsProcessing " <> show' needsProcessing
   -- Poll a bunch of nodes to try to get a status update.
-  let statusl = (_try (_computationStatus session cid)) <$> needsProcessing :: [SparkState (NodeId, PossibleNodeStatus)]
+  let statusl = _try (_computationStatus session cid) <$> needsProcessing :: [SparkState (NodeId, NodePath, DataType, PossibleNodeStatus)]
   status <- sequence statusl
+  -- logDebugN $ "_computationMultiStatus: retreived status " <> show' status
   -- Update the state with the new data
-  updated <- returnPure $ updateCache cid status
-  return undefined
+  (updated, statusUpdate) <- returnPure $ updateCache cid status
+  forM_ statusUpdate $ \(p, s) -> case s of
+      NodeCacheSuccess ->
+        logInfoN $ "_computationMultiStatus: " <> prettyNodePath p <> " finished"
+      NodeCacheError ->
+        logInfoN $ "_computationMultiStatus: " <> prettyNodePath p <> " finished (ERROR)"
+      NodeCacheRunning ->
+        logInfoN $ "_computationMultiStatus: " <> prettyNodePath p <> " running"
+  -- logInfoN $ "_computationMultiStatus: updated status " <> show' statusUpdate
+  -- logDebugN $ "_computationMultiStatus: updated status " <> show' updated
+  -- Filter out the updated nodes, so that we do not ask for them again.
+  let updatedNids = HS.fromList (fst <$> updated)
+  let g (nid, _, _, _) = not $ HS.member nid updatedNids
+  let stillNeedsProcessing = filter g needsProcessing
+  -- Do not block uselessly if we have nothing else to do
+  if null stillNeedsProcessing
+  then return updated
+  else do
+    let delayMillis = confPollingIntervalMillis $ ssConf session
+    _ <- liftIO $ threadDelay (delayMillis * 1000)
+    reminder <- _computationMultiStatus cid stillNeedsProcessing
+    return $ updated ++ reminder
 
-_try :: (Monad m) => (y -> m z) -> (x, y) -> m (x, z)
-_try f (x, y) = f y <&> \z -> (x, z)
+_try :: (Monad m) => (y -> m z) -> (x, x', x'', y) -> m (x, x', x'', z)
+_try f (x, x', x'', y) = f y <&> \z -> (x, x', x'', z)
 
 _waitSingleComputation :: (MonadLoggerIO m) =>
   SparkSession -> Computation -> NodeName -> m FinalResult

@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TupleSections #-}
 
 -- Functions to build the graph of computations.
 -- The following steps are performed:
@@ -16,6 +17,7 @@ module Spark.Core.Internal.ContextInternal(
   buildComputationGraph,
   performGraphTransforms,
   getTargetNodes,
+  getObservables,
   storeResults,
   updateCache
 ) where
@@ -128,14 +130,15 @@ buildComputationGraph ld = do
 
 - fullfilling autocache requests
 - checking the cache/uncache pairs
+- pruning of observed successful computations
 - deconstructions of the unions (in the future)
 
 This could all be done on the server side at this point.
 -}
 performGraphTransforms :: ComputeGraph -> Try ComputeGraph
 performGraphTransforms cg = do
-  let g = traceHint "_performGraphTransforms g=" $ computeGraphToGraph cg
-  let acg = traceHint "_performGraphTransforms: After autocaching:" $ fillAutoCache cachingType autocacheGen g
+  let g = computeGraphToGraph cg -- traceHint "_performGraphTransforms g=" $
+  let acg = fillAutoCache cachingType autocacheGen g -- traceHint "_performGraphTransforms: After autocaching:" $
   g' <- tryEither acg
   failures <- tryEither $ checkCaching g' cachingType
   case failures of
@@ -148,11 +151,13 @@ _buildComputation session cg =
       cid = (ComputationID . pack . show . ssCommandCounter) session
       tiedCg = tieNodes cg
       allNodes = vertexData <$> toList (cdVertices tiedCg)
-      terminalNodeNames = nodeName . vertexData <$> toList (cdOutputs tiedCg)
+      terminalNodes = vertexData <$> toList (cdOutputs tiedCg)
+      terminalNodePaths = nodePath <$> terminalNodes
+      terminalNodeIds = nodeId <$> terminalNodes
   -- TODO it is missing the first node here, hoping it is the first one.
-  in case terminalNodeNames of
-    [name] ->
-      return $ Computation sid cid allNodes [name] name
+  in case terminalNodePaths of
+    [p] ->
+      return $ Computation sid cid allNodes [p] p terminalNodeIds
     _ -> tryError $ sformat ("Programming error in _build1: cg="%sh) cg
 
 _updateVertex :: M.Map HdfsPath DataInputStamp -> Vertex UntypedNode -> Try (Vertex UntypedNode)
@@ -185,6 +190,7 @@ _extract1 (Right ncs) dt = tryEither $ jsonToCell dt (ncsData ncs)
 -- The computation is assumed to be correct and to contain all the nodes
 -- already.
 -- TODO: make it a total function
+-- TODO: this is probably not needed anymore
 getTargetNodes :: (HasCallStack) => Computation -> [UntypedLocalData]
 getTargetNodes comp =
   let
@@ -192,37 +198,65 @@ getTargetNodes comp =
     fun2 n = case asLocalObservable <$> castLocality n of
       Right (Right x) -> x
       err -> failure $ sformat ("_getNodes:fun2: err="%shown%" n="%shown) err n
-    finalNodeNames = traceHint "_getTargetNodes: finalNodeNames=" $cTerminalNodes comp
-    dct = traceHint "_getTargetNodes: dct=" $ M.fromList $ (nodeName &&& id) <$> cNodes comp
+    finalNodeNames = cTerminalNodes comp
+    dct = M.fromList $ (nodePath &&& id) <$> cNodes comp
     untyped' = finalNodeNames <&> \n ->
       let err = failure $ sformat ("Could not find "%sh%" in "%sh) n dct
       in M.findWithDefault err n dct
   in fun2 <$> untyped'
 
-updateCache :: ComputationID -> [(NodeId, NodePath, PossibleNodeStatus)] -> SparkStatePure [(NodeId, FinalResult)]
-updateCache c l = let s = sequence $ _updateCache1 c <$> l
-  in catMaybes <$> s
+{-| Retrieves all the observables from a computation.
+-}
+getObservables :: Computation -> [UntypedLocalData]
+getObservables comp =
+  let fun n = case asLocalObservable <$> castLocality n of
+          Right (Right x) -> Just x
+          _ -> Nothing
+  in catMaybes $ fun <$> cNodes comp
 
-_updateCache1 :: ComputationID -> (NodeId, NodePath, PossibleNodeStatus) -> SparkStatePure (Maybe (NodeId, FinalResult))
-_updateCache1 cid (nid, p, status) = do
+{-| Updates the cache, and returns the updates if there are any.
+
+The updates are split into final results, and general update status (scheduled,
+running, etc.)
+-}
+updateCache :: ComputationID -> [(NodeId, NodePath, DataType, PossibleNodeStatus)] -> SparkStatePure ([(NodeId, Try Cell)], [(NodePath, NodeCacheStatus)])
+updateCache c l = do
+  l' <- sequence $ _updateCache1 c <$> l
+  return (catMaybes (fst <$> l'), catMaybes (snd <$> l'))
+
+_updateCache1 :: ComputationID -> (NodeId, NodePath, DataType, PossibleNodeStatus) -> SparkStatePure (Maybe (NodeId, Try Cell), Maybe (NodePath, NodeCacheStatus))
+_updateCache1 cid (nid, p, dt, status) =
+  case status of
+    (NodeFinishedSuccess s) -> do
+      updated <- _insertCacheUpdate cid nid p NodeCacheSuccess
+      let res2 = _extract1 (Right s) dt
+      return (Just (nid, res2), (p, ) <$> updated)
+    (NodeFinishedFailure e) -> do
+      updated <- _insertCacheUpdate cid nid p NodeCacheError
+      let res2 = _extract1 (Left e) dt
+      return (Just (nid, res2), (p, ) <$> updated)
+    NodeRunning -> do
+      updated <- _insertCacheUpdate cid nid p NodeCacheRunning
+      return (Nothing, (p, ) <$> updated)
+    _ -> return (Nothing, Nothing)
+
+-- Returns true if the cache is updated
+_insertCacheUpdate :: ComputationID -> NodeId -> NodePath -> NodeCacheStatus -> SparkStatePure (Maybe NodeCacheStatus)
+_insertCacheUpdate cid nid p s = do
   session <- get
   let m = ssNodeCache session
-  let up = case status of
-        (NodeFinishedSuccess s) -> Just (NodeCacheSuccess, Right s)
-        (NodeFinishedFailure e) -> Just (NodeCacheError, Left e)
-        _ -> Nothing
-  case up of
-    Just (c, res) ->
-      let v = NodeCacheInfo {
-                nciStatus = c,
-                nciComputation = cid,
-                nciPath = p }
-          m' = HM.insert nid v m
-          session' = session { ssNodeCache = m' }
-      in do
-        put session'
-        return (Just (nid, res))
-    Nothing -> return Nothing
+  let currentStatus = nciStatus <$> HM.lookup nid m
+  if currentStatus == Just s
+  then return Nothing
+  else do
+    let v = NodeCacheInfo {
+              nciStatus = s,
+              nciComputation = cid,
+              nciPath = p }
+    let m' = HM.insert nid v m
+    let session' = session { ssNodeCache = m' }
+    put session'
+    return $ Just s
 
 
 -- Stores the results of the computation in the state (so that we can accelerate the

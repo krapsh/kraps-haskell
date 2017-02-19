@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
 -- The communication protocol with the server
 
 module Spark.Core.Internal.Client where
@@ -31,10 +32,13 @@ data Computation = Computation {
   cId :: !ComputationID,
   cNodes :: ![UntypedNode],
   -- Non-empty
-  cTerminalNodes :: ![NodeName],
+  cTerminalNodes :: ![NodePath],
   -- The node at the top of the computation.
   -- Must be part of the terminal nodes.
-  cCollectingNode :: NodeName
+  cCollectingNode :: !NodePath,
+  -- This redundant information is not serialized.
+  -- It is used internally to track the resulting nodes.
+  cTerminalNodeIds :: ![NodeId]
 } deriving (Show, Generic)
 
 
@@ -55,31 +59,17 @@ data NodeComputationFailure = NodeComputationFailure {
   ncfMessage :: !Text
 } deriving (Show, Generic)
 
--- data EndNodeStatus = EndNodeStatus {
---   ensPath :: !NodePath,
---   ensStatus :: !PossibleNodeStatus,
---   ensValue :: !(Maybe Cell)
--- } deriving (Show, Generic)
-
--- data AggregateProgressStatus = AggregateProgressStatus {
---   apsBundlePaths :: ![NodePath]
--- } deriving (Show, Generic)
-
--- data GetNodeStatusResponse = GetNodeStatusResponse {
---   gnsrEndNodes :: ![EndNodeStatus],
---   gnsrBundles :: ![AggregateProgressStatus]
--- } deriving (Show, Generic)
-
--- data GetNodeStatus = GetNodeStatus {
---   gnsSessionId :: !LocalSessionId,
---   gnsComputationId :: !ComputationID,
---   gnsIncludeResults :: !Bool,
---   gnsRequestedNodes :: ![NodePath]
--- } deriving (Show, Generic)
 
 -- **** AESON INSTANCES ***
 
-instance ToJSON Computation
+-- instance ToJSON Computation where
+--   toJSON c = object [
+--         "sessionId" .= toJSON (cSessionId c),
+--         "id" .= toJSON (cId c),
+--         "nodes" .= toJSON (cNodes c),
+--         "terminalNodes" .= toJSON (cTerminalNodes c),
+--         "collectingNode" .= toJSON (cCollectingNode c)
+--       ]
 
 instance ToJSON LocalSessionId where
   toJSON = toJSON . unLocalSession
@@ -105,7 +95,7 @@ instance FromJSON PossibleNodeStatus where
     in
       withObject "PossibleNodeStatus" $ \o -> do
       status <- o .: pack "status"
-      case status of
+      case pack status of
         "running" -> return NodeRunning
         "finished_success" -> parseSuccess o
         "finished_failure" -> parseFailure o

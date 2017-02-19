@@ -58,7 +58,8 @@ On purpose, it does not store data. This is meant to be
 only the control plane of the compuations.
 -}
 data NodeCacheStatus =
-    NodeCacheError
+    NodeCacheRunning
+  | NodeCacheError
   | NodeCacheSuccess
   deriving (Eq, Show)
 
