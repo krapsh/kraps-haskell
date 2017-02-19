@@ -42,7 +42,7 @@ spec = do
       -- TODO: should it show "value: int" instead?
       -- I think it should show it for distributed nodes only.
       -- SQL is not allowed on observables
-      (show avg) `shouldBe` "myaverage@org.spark.LocalDiv!{int}"
+      (show avg) `shouldBe` "myaverage@org.spark.LocalDiv!int"
   describe "pack1" $ do
     it "Extracting and packing one column" $ do
       let numbers = asCol ds1
