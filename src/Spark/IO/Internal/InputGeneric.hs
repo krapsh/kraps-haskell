@@ -30,7 +30,6 @@ import Spark.Core.Internal.Utilities(forceRight, traceHint)
 import Spark.Core.Internal.DatasetFunctions(asDF, emptyDataset, emptyLocalData)
 import Spark.Core.Internal.TypesStructures(SQLType(..))
 import Spark.Core.Internal.OpStructures
-import Spark.Core.Internal.ContextStructures(DataInputStamp(..))
 
 {-| A path to some data that can be read by Spark.
 -}
@@ -167,6 +166,7 @@ instance A.ToJSON SourceDescription where
                 "inputPath" .= toJSON (inputPath sd),
                 "inputSource" .= toJSON (inputSource sd),
                 "inputSchema" .= toJSON (inputSchema sd),
+                "inputStamp" .= A.Null,
                 "options" .= A.object (f <$> M.toList (sdOptions sd))
               ] where
                 f (k, v) = unInputOptionKey k .= toJSON v

@@ -5,7 +5,9 @@ nodes and columns.
 module Spark.Core.Internal.OpStructures where
 
 import Data.Text as T
-import Data.Aeson(Value, Value(Null))
+import Data.Aeson(Value, Value(Null), FromJSON, ToJSON, toJSON)
+import Data.Aeson.Types(typeMismatch)
+import qualified Data.Aeson as A
 import Data.Vector(Vector)
 
 import Spark.Core.StructuresInternal
@@ -24,6 +26,26 @@ type UdafClassName = T.Text
 {-| The name of an operator defined in Kraps.
 -}
 type OperatorName = T.Text
+
+{-| A path in the Hadoop File System (HDFS).
+
+These paths are usually not created by the user directly.
+-}
+data HdfsPath = HdfsPath Text deriving (Eq, Show, Ord)
+
+{-| A stamp that defines some notion of uniqueness of the data source.
+
+The general contract is that:
+ - stamps can be extracted fast (no need to scan the whole dataset)
+ - if the data gets changed, the stamp will change.
+
+Stamps are used for performing aggressing operation caching, so it is better
+to conservatively update stamps if one is unsure about the freshness of the
+dataset. For regular files, stamps are computed using the file system time
+stamps.
+-}
+data DataInputStamp = DataInputStamp Text deriving (Eq, Show)
+
 
 {-| The invariant respected by a transform.
 
@@ -249,3 +271,17 @@ makeOperator txt sqlt =
     soName = txt,
     soOutputType = unSQLType sqlt,
     soExtra = Null }
+
+instance ToJSON HdfsPath where
+  toJSON (HdfsPath p) = toJSON p
+
+instance ToJSON DataInputStamp where
+  toJSON (DataInputStamp p) = toJSON p
+
+instance FromJSON HdfsPath where
+  parseJSON (A.String p) = return (HdfsPath p)
+  parseJSON x = typeMismatch "HdfsPath" x
+
+instance FromJSON DataInputStamp where
+  parseJSON (A.String p) = return (DataInputStamp p)
+  parseJSON x = typeMismatch "DataInputStamp" x

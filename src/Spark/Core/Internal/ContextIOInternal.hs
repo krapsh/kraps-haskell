@@ -32,6 +32,7 @@ import GHC.Generics
 -- import Formatting
 import Network.Wreq.Types(Postable)
 import Data.ByteString.Lazy(ByteString)
+import qualified Data.HashMap.Strict as HM
 
 import Spark.Core.Dataset
 import Spark.Core.Internal.Client
@@ -39,12 +40,11 @@ import Spark.Core.Internal.ContextInternal
 import Spark.Core.Internal.ContextStructures
 import Spark.Core.Internal.DatasetFunctions(untypedLocalData)
 import Spark.Core.Internal.DatasetStructures(UntypedLocalData)
+import Spark.Core.Internal.OpStructures(DataInputStamp(..))
 import Spark.Core.Row
 import Spark.Core.StructuresInternal
 import Spark.Core.Try
 import Spark.Core.Internal.Utilities
-
-
 
 returnPure :: forall a. SparkStatePure a -> SparkState a
 returnPure p = lift $ mapStateT (return . runIdentity) p
@@ -88,25 +88,44 @@ executeCommand1 ld = do
     tcell <- executeCommand1' (untypedLocalData ld)
     return $ tcell >>= (tryEither . cellToValue)
 
+-- The main function to launch computations.
 executeCommand1' :: (HasCallStack) => UntypedLocalData -> SparkState (Try Cell)
 executeCommand1' ld = do
-    session <- get
-    tcomp <- returnPure $ prepareExecution1 ld
-    case tcomp of
-      Left err ->
-        return (Left err)
-      Right comp ->
-        let
-          obss = getTargetNodes comp
-          fun3 ld2 = do
-            result <- _waitSingleComputation session comp (nodeName ld2)
-            return (ld2, result)
-          nodeResults :: SparkState [(LocalData Cell, FinalResult)]
-          nodeResults = sequence (fun3 <$> obss)
-        in do
-          _ <- _sendComputation session comp
-          nrs <- nodeResults
-          returnPure $ storeResults comp nrs
+  -- Retrieve the computation graph
+  let cgt = buildComputationGraph ld
+  _ret cgt $ \cg -> do
+    -- Source inspection:
+    -- Gather the sources
+    let sources = inputSourcesRead cg
+    logDebugN $ "executeCommand1: found sources " <> show' sources
+    -- Get the source stamps. Any error at this point is considered fatal.
+    stampsRet <- checkDataStamps sources
+    logDebugN $ "executeCommand1: retrieved stamps " <> show' stampsRet
+    let stampst = sequence $ _f <$> stampsRet
+    _ret stampst $ \stamps -> do
+      -- Update the computations with the stamps, and build the computation.
+      compt <- returnPure $ prepareComputation stamps cg
+      _ret compt $ \comp -> do
+        -- Run the computation.
+        let obss = getTargetNodes comp
+        session <- get
+        -- Main loop to wait on the results.
+        let fun3 ld2 = do
+              result <- _waitSingleComputation session comp (nodeName ld2)
+              return (ld2, result)
+        let nodeResults = sequence (fun3 <$> obss) :: SparkState [(LocalData Cell, FinalResult)]
+        _ <- _sendComputation session comp
+        nrs <- nodeResults
+        returnPure $ storeResults comp nrs
+
+_ret :: Try a -> (a -> SparkState (Try b)) -> SparkState (Try b)
+_ret (Left x) _ = return (Left x)
+_ret (Right x) f = f x
+
+_f :: (a, Try b) -> Try (a, b)
+_f (x, t) = case t of
+                Right u -> Right (x, u)
+                Left e -> Left e
 
 data StampReturn = StampReturn {
   stampReturnPath :: !Text,
@@ -172,8 +191,8 @@ _pollMonad rec delayMillis check = do
 
 -- Creates a new session from a string containing a session ID.
 _createSparkSession :: SparkSessionConf -> Text -> Integer -> SparkSession
-_createSparkSession conf sessionId =
-  SparkSession conf sid where
+_createSparkSession conf sessionId idx =
+  SparkSession conf sid idx HM.empty where
     sid = LocalSessionId sessionId
 
 _port :: SparkSession -> Text
@@ -259,6 +278,24 @@ _computationStatus session compId nname = do
     _ -> return ()
   return s
 
+_computationMultiStatus :: ComputationID -> [(NodeId, NodeName)] -> SparkState [FinalResult]
+_computationMultiStatus _ [] = return []
+_computationMultiStatus cid l = do
+  session <- get
+  -- Find the nodes that still need processing
+  let f (nid, _) = case HM.lookup nid (ssNodeCache session) of
+            Just nci -> nciStatus nci == NodeCacheSuccess
+            _ -> False
+  let needsProcessing = filter f l
+  -- Poll a bunch of nodes to try to get a status update.
+  let statusl = (_try (_computationStatus session cid)) <$> needsProcessing :: [SparkState (NodeId, PossibleNodeStatus)]
+  status <- sequence statusl
+  -- Update the state with the new data
+  updated <- returnPure $ updateCache cid status
+  return undefined
+
+_try :: (Monad m) => (y -> m z) -> (x, y) -> m (x, z)
+_try f (x, y) = f y <&> \z -> (x, z)
 
 _waitSingleComputation :: (MonadLoggerIO m) =>
   SparkSession -> Computation -> NodeName -> m FinalResult

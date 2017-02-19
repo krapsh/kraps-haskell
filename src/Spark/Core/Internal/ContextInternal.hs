@@ -11,32 +11,40 @@
 
 module Spark.Core.Internal.ContextInternal(
   FinalResult,
-  prepareExecution1,
+  inputSourcesRead,
+  prepareComputation,
   buildComputationGraph,
   performGraphTransforms,
   getTargetNodes,
   storeResults,
+  updateCache
 ) where
 
 import Control.Monad.State(get, put)
-import Control.Monad(forM)
+import Control.Monad(forM, when)
 import Data.Text(pack)
+import Data.Maybe(mapMaybe, catMaybes)
+import Data.Either(isRight)
 import Debug.Trace(trace)
 import Data.Foldable(toList)
 import Control.Arrow((&&&))
 import Formatting
 import qualified Data.Map.Strict as M
+import qualified Data.HashMap.Strict as HM
 
 import Spark.Core.Dataset
 import Spark.Core.Try
 import Spark.Core.Row
 import Spark.Core.Types
+import Spark.Core.StructuresInternal(NodeId, NodePath)
 import Spark.Core.Internal.Caching
 import Spark.Core.Internal.CachingUntyped
 import Spark.Core.Internal.ContextStructures
 import Spark.Core.Internal.Client
 import Spark.Core.Internal.ComputeDag
 import Spark.Core.Internal.PathsUntyped
+import Spark.Core.Internal.OpFunctions(hdfsPath, updateSourceStamp)
+import Spark.Core.Internal.OpStructures(HdfsPath(..), DataInputStamp)
 -- Required to import the instances.
 import Spark.Core.Internal.Paths()
 import Spark.Core.Internal.DAGFunctions(buildVertexList)
@@ -49,18 +57,48 @@ import Spark.Core.Internal.Utilities
 type FinalResult = Either NodeComputationFailure NodeComputationSuccess
 
 
--- The main function that takes a single output point and
--- tries to transform it as a valid computation.
-prepareExecution1 :: LocalData a -> SparkStatePure (Try Computation)
-prepareExecution1 ld = get >>= \session ->
-  let cg = buildComputationGraph ld
-      cg' = performGraphTransforms =<< cg
-      comp = _buildComputation session =<< cg'
-  in case comp of
-      Left _ -> return comp
-      Right _ -> do
-        _increaseCompCounter
-        return comp
+-- -- The main function that takes a single output point and
+-- -- tries to transform it as a valid computation.
+-- prepareExecution1 :: LocalData a -> SparkStatePure (Try Computation)
+-- prepareExecution1 ld = get >>= \session ->
+--   let cg = buildComputationGraph ld
+--       cg' = performGraphTransforms =<< cg
+--       comp = _buildComputation session =<< cg'
+--   in case comp of
+--       Left _ -> return comp
+--       Right _ -> do
+--         _increaseCompCounter
+--         return comp
+
+{-| Given a context for the computation and a graph of computation, builds a
+computation object.
+-}
+prepareComputation ::
+  [(HdfsPath, DataInputStamp)] ->
+  ComputeGraph ->
+  SparkStatePure (Try Computation)
+prepareComputation l cg = do
+  -- Annotate the graph nodes with the stamp information
+  let m = M.fromList l
+    -- Only transform the sinks, since there is no writing.
+  let inputs = cdInputs cg
+  session <- get
+  let compt = do
+        inputs' <- sequence $ _updateVertex m <$> inputs
+        let cg1 = cg { cdInputs = inputs' }
+        -- TODO: prunning of all the computations already succesful
+        -- Graph transforms
+        cg2 <- performGraphTransforms cg1
+        -- Build the computation
+        _buildComputation session cg2
+  when (isRight compt) _increaseCompCounter
+  return compt
+
+{-| A list of file sources that are being requested by the compute graph -}
+inputSourcesRead :: ComputeGraph -> [HdfsPath]
+inputSourcesRead cg =
+  -- TODO: make unique elements
+  mapMaybe (hdfsPath.nodeOp.vertexData) (toList (cdVertices cg))
 
 -- Here are the steps being run
 --  - node collection + cycle detection
@@ -117,6 +155,16 @@ _buildComputation session cg =
       return $ Computation sid cid allNodes [name] name
     _ -> tryError $ sformat ("Programming error in _build1: cg="%sh) cg
 
+_updateVertex :: M.Map HdfsPath DataInputStamp -> Vertex UntypedNode -> Try (Vertex UntypedNode)
+_updateVertex m v =
+  let un = vertexData v
+      no = nodeOp un in case hdfsPath no of
+    Just p -> case M.lookup p m of
+      Just dis -> updateSourceStamp no dis <&> \no' ->
+          v { vertexData = updateNodeOp un no' }
+      Nothing -> tryError $ "_updateVertex: Expected to find path " <> show' p
+    Nothing -> pure v
+
 _increaseCompCounter :: SparkStatePure ()
 _increaseCompCounter = get >>= \session ->
   let
@@ -151,10 +199,35 @@ getTargetNodes comp =
       in M.findWithDefault err n dct
   in fun2 <$> untyped'
 
+updateCache :: ComputationID -> [(NodeId, NodePath, PossibleNodeStatus)] -> SparkStatePure [(NodeId, FinalResult)]
+updateCache c l = let s = sequence $ _updateCache1 c <$> l
+  in catMaybes <$> s
+
+_updateCache1 :: ComputationID -> (NodeId, NodePath, PossibleNodeStatus) -> SparkStatePure (Maybe (NodeId, FinalResult))
+_updateCache1 cid (nid, p, status) = do
+  session <- get
+  let m = ssNodeCache session
+  let up = case status of
+        (NodeFinishedSuccess s) -> Just (NodeCacheSuccess, Right s)
+        (NodeFinishedFailure e) -> Just (NodeCacheError, Left e)
+        _ -> Nothing
+  case up of
+    Just (c, res) ->
+      let v = NodeCacheInfo {
+                nciStatus = c,
+                nciComputation = cid,
+                nciPath = p }
+          m' = HM.insert nid v m
+          session' = session { ssNodeCache = m' }
+      in do
+        put session'
+        return (Just (nid, res))
+    Nothing -> return Nothing
+
 
 -- Stores the results of the computation in the state (so that we can accelerate the
 -- next sessions) and returns the expected final results (as a Cell to be converted)
-storeResults :: Computation -> [(LocalData Cell, FinalResult)] -> SparkStatePure (Try Cell)
+storeResults :: Computation -> [(UntypedLocalData, FinalResult)] -> SparkStatePure (Try Cell)
 storeResults comp [] = return e where
   e = tryError $ sformat ("No result returned for computation "%shown) comp
 storeResults _ res =

@@ -38,6 +38,7 @@ module Spark.Core.Internal.DatasetFunctions(
   untypedDataset,
   untypedLocalData,
   updateNode,
+  updateNodeOp,
   -- Developer conversions
   fun1ToOpTyped,
   fun2ToOpTyped,
@@ -308,6 +309,9 @@ updateNode ds f = ds2 { _cnNodeId = id2 } where
   ds2 = f ds
   id2 = _nodeId ds2
 
+
+updateNodeOp :: ComputeNode loc a -> NodeOp -> ComputeNode loc a
+updateNodeOp n no = updateNode n (\n' -> n' { _cnOp = no })
 
 -- (internal)
 -- The locality of the node
