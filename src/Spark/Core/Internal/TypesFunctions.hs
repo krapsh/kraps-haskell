@@ -22,7 +22,7 @@ module Spark.Core.Internal.TypesFunctions(
   -- cellType,
 ) where
 
-import Control.Monad((>=>))
+-- import Control.Monad((>=>))
 import Control.Monad.Except
 import Control.Arrow(second)
 import Data.Function(on)

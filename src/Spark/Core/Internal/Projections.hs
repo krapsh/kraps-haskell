@@ -90,7 +90,7 @@ type family ProjectReturn from proj where
   ProjectReturn DynColumn Text = DynColumn
   ProjectReturn (Dataset x) DynamicColProjection = DynColumn
   ProjectReturn (Dataset x) (StaticColProjection x y) = Column x y
-  ProjectReturn (Dataset _) Text = DynColumn
+  ProjectReturn (Dataset x) Text = DynColumn
 
 
 class MyString x where
