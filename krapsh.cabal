@@ -43,6 +43,7 @@ library
                        Spark.Core.Internal.Paths,
                        Spark.Core.Internal.PathsUntyped,
                        Spark.Core.Internal.Projections,
+                       Spark.Core.Internal.Pruning,
                        Spark.Core.Internal.RowGenericsFrom,
                        Spark.Core.Internal.Utilities,
                        Spark.Core.Internal.TypesGenerics,
@@ -145,6 +146,7 @@ test-suite krapsh-test-integration
                        Spark.Core.IntegrationUtilities,
                        Spark.Core.JoinsSpec,
                        Spark.Core.SimpleAddSpec,
+                       Spark.Core.PruningSpec,
                        Spark.IO.JsonSpec,
                        Spark.IO.StampSpec
   build-depends:       aeson

@@ -9,7 +9,6 @@ module Spark.Core.Internal.ContextStructures(
   HdfsPath(..),
   NodeCacheInfo(..),
   NodeCacheStatus(..),
-  -- InternalStateT,
   SparkStateT,
   SparkStatePureT
 ) where
@@ -17,12 +16,11 @@ module Spark.Core.Internal.ContextStructures(
 import Data.Text(Text)
 import Control.Monad.State(StateT, State)
 import Control.Monad.Logger(LoggingT)
-import Data.HashMap.Strict as HM
 
-import Spark.Core.StructuresInternal(NodeId, NodePath)
-import Spark.Core.Internal.Client(LocalSessionId, ComputationID)
+import Spark.Core.Internal.Client(LocalSessionId)
 import Spark.Core.Internal.ComputeDag(ComputeDag)
 import Spark.Core.Internal.OpStructures(HdfsPath(..))
+import Spark.Core.Internal.Pruning
 import Spark.Core.Internal.DatasetStructures(UntypedNode, StructureEdge)
 
 -- | The configuration of a remote spark session in krapsh.
@@ -39,7 +37,16 @@ data SparkSessionConf = SparkSessionConf {
   --  - if it already exists on the server, it will be reconnected to
   --
   -- The default value is "" (a new random context name will be chosen).
-  confRequestedSessionName :: !Text
+  confRequestedSessionName :: !Text,
+  {-| If enabled, attempts to prune the computation graph as much as possible.
+
+  This option is useful in interactive sessions when long chains of computations
+  are extracted. This forces the execution of only the missing parts.
+  The algorithm is experimental, so disabling it is a safe option.
+
+  Disabled by default.
+  -}
+  confUseNodePrunning :: !Bool
 } deriving (Show)
 
 -- | A session in Spark.
@@ -49,31 +56,10 @@ data SparkSession = SparkSession {
   ssConf :: !SparkSessionConf,
   ssId :: !LocalSessionId,
   ssCommandCounter :: !Integer,
-  ssNodeCache :: HM.HashMap NodeId NodeCacheInfo
+  ssNodeCache :: !NodeCache
 } deriving (Show)
 
-{-| The status of a node being computed.
 
-On purpose, it does not store data. This is meant to be
-only the control plane of the compuations.
--}
-data NodeCacheStatus =
-    NodeCacheRunning
-  | NodeCacheError
-  | NodeCacheSuccess
-  deriving (Eq, Show)
-
-{-| This structure describes the last time a node was observed by the
-controller, and the state it was in.
-
-This information is used to do smart computation pruning, by assuming
-that the observables are kept by the Spark processes.
--}
-data NodeCacheInfo = NodeCacheInfo {
-  nciStatus :: !NodeCacheStatus,
-  nciComputation :: !ComputationID,
-  nciPath :: !NodePath
-} deriving (Eq, Show)
 
 -- | Represents the state of a session and accounts for the communication
 -- with the server.

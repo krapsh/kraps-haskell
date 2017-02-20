@@ -45,6 +45,7 @@ simpleShowOp (NodeDistributedLit _ _) = "org.spark.Constant"
 simpleShowOp (NodeGroupedReduction _) = "org.spark.GroupedReduction"
 simpleShowOp (NodeReduction _) = "org.spark.Reduction"
 simpleShowOp NodeBroadcastJoin = "org.spark.BroadcastJoin"
+simpleShowOp (NodePointer _) = "org.spark.PlaceholderCache"
 
 -- A human-readable string that represents column operations.
 prettyShowColOp :: ColOp -> T.Text
@@ -129,7 +130,11 @@ extraNodeOpData (NodeLocalOp so) = soExtra so
 extraNodeOpData NodeBroadcastJoin = A.Null
 extraNodeOpData (NodeReduction _) = A.Null -- TODO: should it send something?
 extraNodeOpData (NodeAggregatorLocalReduction _) = A.Null -- TODO: should it send something?
-
+extraNodeOpData (NodePointer p) =
+    A.object [
+      "computation" .= toJSON (pointerComputation p),
+      "path" .= toJSON (pointerPath p)
+    ]
 
 -- Adds the content of a node op to a hash.
 -- Right now, this builds the json representation and passes it

@@ -18,16 +18,15 @@ module Spark.Core.Internal.ContextInternal(
   performGraphTransforms,
   getTargetNodes,
   getObservables,
-  storeResults,
+  insertSourceInfo,
   updateCache
 ) where
 
 import Control.Monad.State(get, put)
-import Control.Monad(forM, when)
+import Control.Monad(when)
 import Data.Text(pack)
 import Data.Maybe(mapMaybe, catMaybes)
 import Data.Either(isRight)
-import Debug.Trace(trace)
 import Data.Foldable(toList)
 import Control.Arrow((&&&))
 import Formatting
@@ -38,13 +37,14 @@ import Spark.Core.Dataset
 import Spark.Core.Try
 import Spark.Core.Row
 import Spark.Core.Types
-import Spark.Core.StructuresInternal(NodeId, NodePath)
+import Spark.Core.StructuresInternal(NodeId, NodePath, ComputationID(..))
 import Spark.Core.Internal.Caching
 import Spark.Core.Internal.CachingUntyped
 import Spark.Core.Internal.ContextStructures
 import Spark.Core.Internal.Client
 import Spark.Core.Internal.ComputeDag
 import Spark.Core.Internal.PathsUntyped
+import Spark.Core.Internal.Pruning
 import Spark.Core.Internal.OpFunctions(hdfsPath, updateSourceStamp)
 import Spark.Core.Internal.OpStructures(HdfsPath(..), DataInputStamp)
 -- Required to import the instances.
@@ -58,43 +58,31 @@ import Spark.Core.Internal.Utilities
 -- The result from querying the status of a computation
 type FinalResult = Either NodeComputationFailure NodeComputationSuccess
 
-
--- -- The main function that takes a single output point and
--- -- tries to transform it as a valid computation.
--- prepareExecution1 :: LocalData a -> SparkStatePure (Try Computation)
--- prepareExecution1 ld = get >>= \session ->
---   let cg = buildComputationGraph ld
---       cg' = performGraphTransforms =<< cg
---       comp = _buildComputation session =<< cg'
---   in case comp of
---       Left _ -> return comp
---       Right _ -> do
---         _increaseCompCounter
---         return comp
-
 {-| Given a context for the computation and a graph of computation, builds a
 computation object.
 -}
 prepareComputation ::
-  [(HdfsPath, DataInputStamp)] ->
   ComputeGraph ->
   SparkStatePure (Try Computation)
-prepareComputation l cg = do
-  -- Annotate the graph nodes with the stamp information
-  let m = M.fromList l
-    -- Only transform the sinks, since there is no writing.
-  let inputs = cdInputs cg
+prepareComputation cg = do
   session <- get
   let compt = do
-        inputs' <- sequence $ _updateVertex m <$> inputs
-        let cg1 = cg { cdInputs = inputs' }
-        -- TODO: prunning of all the computations already succesful
-        -- Graph transforms
-        cg2 <- performGraphTransforms cg1
+        cg2 <- performGraphTransforms session cg
         -- Build the computation
         _buildComputation session cg2
   when (isRight compt) _increaseCompCounter
   return compt
+
+{-| Exposed for debugging -}
+insertSourceInfo :: ComputeGraph -> [(HdfsPath, DataInputStamp)] -> Try ComputeGraph
+insertSourceInfo cg l = do
+  let m = M.fromList l
+      -- Only transform the sinks, since there is no writing.
+  let inputs = cdInputs cg
+  inputs' <- sequence $ _updateVertex m <$> inputs
+  return $ cg { cdInputs = inputs' }
+
+
 
 {-| A list of file sources that are being requested by the compute graph -}
 inputSourcesRead :: ComputeGraph -> [HdfsPath]
@@ -113,6 +101,7 @@ inputSourcesRead cg =
 --
 -- There is a lot more that could be done (merging the aggregations, etc.)
 -- but it is outside the scope of this MVP.
+-- TODO: should graph pruning be moved before naming?
 
 {-| Builds the computation graph by expanding a single node until a transitive
 closure is reached.
@@ -135,10 +124,14 @@ buildComputationGraph ld = do
 
 This could all be done on the server side at this point.
 -}
-performGraphTransforms :: ComputeGraph -> Try ComputeGraph
-performGraphTransforms cg = do
+performGraphTransforms :: SparkSession -> ComputeGraph -> Try ComputeGraph
+performGraphTransforms session cg = do
   let g = computeGraphToGraph cg -- traceHint "_performGraphTransforms g=" $
-  let acg = fillAutoCache cachingType autocacheGen g -- traceHint "_performGraphTransforms: After autocaching:" $
+  let conf = ssConf session
+  let pruned = if confUseNodePrunning conf
+               then pruneGraphDefault (ssNodeCache session) g
+               else g
+  let acg = fillAutoCache cachingType autocacheGen pruned -- traceHint "_performGraphTransforms: After autocaching:" $
   g' <- tryEither acg
   failures <- tryEither $ checkCaching g' cachingType
   case failures of
@@ -257,21 +250,3 @@ _insertCacheUpdate cid nid p s = do
     let session' = session { ssNodeCache = m' }
     put session'
     return $ Just s
-
-
--- Stores the results of the computation in the state (so that we can accelerate the
--- next sessions) and returns the expected final results (as a Cell to be converted)
-storeResults :: Computation -> [(UntypedLocalData, FinalResult)] -> SparkStatePure (Try Cell)
-storeResults comp [] = return e where
-  e = tryError $ sformat ("No result returned for computation "%shown) comp
-storeResults _ res =
-  let
-    fun4 :: (LocalData Cell, FinalResult) -> Try Cell
-    fun4 (node, fresult) =
-      trace ("_storeResults node=" ++ show node ++ "final = " ++ show fresult) $
-        _extract1 fresult (unSQLType (nodeType node))
-    allResults = sequence $ forM res fun4
-    expResult = head allResults -- Just accessing the final result for now
-  in
-    -- TODO store the results:
-    return expResult

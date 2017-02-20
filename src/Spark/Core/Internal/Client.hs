@@ -23,10 +23,6 @@ data LocalSessionId = LocalSessionId {
   unLocalSession :: !Text
 } deriving (Eq, Show)
 
-data ComputationID = ComputationID {
-  unComputationID :: !Text
-} deriving (Eq, Show, Generic)
-
 data Computation = Computation {
   cSessionId :: !LocalSessionId,
   cId :: !ComputationID,
@@ -62,23 +58,8 @@ data NodeComputationFailure = NodeComputationFailure {
 
 -- **** AESON INSTANCES ***
 
--- instance ToJSON Computation where
---   toJSON c = object [
---         "sessionId" .= toJSON (cSessionId c),
---         "id" .= toJSON (cId c),
---         "nodes" .= toJSON (cNodes c),
---         "terminalNodes" .= toJSON (cTerminalNodes c),
---         "collectingNode" .= toJSON (cCollectingNode c)
---       ]
-
 instance ToJSON LocalSessionId where
   toJSON = toJSON . unLocalSession
-
--- instance FromJSON LocalSessionID where
---   parseJSON = LocalSessionID <$> parseJSON
-
-instance ToJSON ComputationID where
-  toJSON = toJSON . unComputationID
 
 -- Because we get a row back, we need to supply a SQLType for deserialization.
 instance FromJSON PossibleNodeStatus where
@@ -101,10 +82,3 @@ instance FromJSON PossibleNodeStatus where
         "finished_failure" -> parseFailure o
         "scheduled" -> return NodeQueued
         _ -> failure $ pack ("FromJSON PossibleNodeStatus " ++ show status)
-
-    -- Person <$> o .: "name" <*> o .: "age"
-
--- instance ToJSON PossibleNodeStatus where
---   toJSON NodeQueued = toJSON "queued"
---   toJSON NodeRunning = toJSON "running"
---   toJSON NodeFinished = toJSON "finished"

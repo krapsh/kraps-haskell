@@ -41,6 +41,7 @@ cachingType n = case nodeOp n of
   NodeBroadcastJoin -> pure Through
   NodeGroupedReduction _ -> pure Stop
   NodeReduction _ -> pure Stop
+  NodePointer _ -> pure Stop -- It is supposed to be an observable
 
 autocacheGen :: AutocacheGen UntypedNode
 autocacheGen = AutocacheGen {

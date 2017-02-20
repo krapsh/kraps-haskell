@@ -10,6 +10,7 @@ module Spark.Core.StructuresInternal(
   NodeId(..),
   FieldName(..),
   FieldPath(..),
+  ComputationID(..),
   catNodePath,
   fieldName,
   unsafeFieldName,
@@ -50,6 +51,15 @@ newtype FieldName = FieldName { unFieldName :: T.Text } deriving (Eq)
 -- | A path to a nested field an a sql structure.
 -- This structure ensures that proper escaping happens if required.
 newtype FieldPath = FieldPath { unFieldPath :: Vector FieldName } deriving (Eq)
+
+{-| A unique identifier for a computation (a batch of nodes sent for execution
+to Spark).
+-}
+data ComputationID = ComputationID {
+  unComputationID :: !T.Text
+} deriving (Eq, Show, Generic)
+
+
 
 -- | A safe constructor for field names that fixes all the issues relevant to
 -- SQL escaping
@@ -126,3 +136,6 @@ instance A.ToJSON FieldPath where
 
 instance Ord FieldName where
   compare f1 f2 = compare (unFieldName f1) (unFieldName f2)
+
+instance A.ToJSON ComputationID where
+  toJSON = A.toJSON . unComputationID

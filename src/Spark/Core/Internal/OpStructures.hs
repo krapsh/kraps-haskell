@@ -220,6 +220,12 @@ data NodeOp2 =
   | NodeOpaqueTransform !Locality StandardOperator
   deriving (Eq, Show)
 
+{-| A pointer to a node that is assumed to be already computed.
+-}
+data Pointer = Pointer {
+  pointerComputation :: !ComputationID,
+  pointerPath :: !NodePath
+} deriving (Eq, Show)
 
 {-
 A node operation.
@@ -262,6 +268,7 @@ data NodeOp =
   | NodeDistributedLit !DataType !(Vector Value)
     -- | An opaque distributed operator.
   | NodeDistributedOp StandardOperator
+  | NodePointer Pointer
   deriving (Eq, Show)
 
 -- | Makes a standard operator with no extra value
