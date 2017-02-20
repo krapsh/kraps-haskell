@@ -64,7 +64,7 @@ from datasets or dataframes, or sub-observables from observables.
 
 TODO(kps) put an example here.
 -}
-(//) :: forall from proj. Project from proj => from -> proj -> (ProjectReturn from proj)
+(//) :: forall from proj. Project from proj => from -> proj -> ProjectReturn from proj
 (//) = _performProject
 -- (//) :: forall from proj to. Projection from proj to => from -> proj -> to
 -- (//) = _performProjection
@@ -78,14 +78,8 @@ Because of a Haskell limitation, this operator is different for strings.
 
 TODO(kps) put an example here.
 -}
-(/-) :: forall from. Project from Text => from -> Text -> (ProjectReturn from Text)
+(/-) :: forall from. Project from Text => from -> Text -> ProjectReturn from Text
 (/-) = _performProject
-
-
-data Foo
-data Bar
-
-type family TextProjectReturn from where
 
 
 type family ProjectReturn from proj where
@@ -138,6 +132,8 @@ instance Project (Dataset a) Text where
     let s' = T.unpack $ convertToText s
     in projectDSDyn ds (stringToDynColProj s')
 
+-- data Foo
+-- data Bar
 --
 -- test =
 --   let dyn1 = undefined :: DynColumn
