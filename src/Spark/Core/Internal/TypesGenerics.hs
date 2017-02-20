@@ -20,6 +20,7 @@ import Spark.Core.Internal.TypesStructures
 import Spark.Core.Internal.TypesFunctions
 import Spark.Core.Internal.Utilities
 import Spark.Core.StructuresInternal(FieldName(..), unsafeFieldName)
+import Spark.Core.Internal.TypesStructuresRepr(DataTypeRepr, DataTypeElementRepr)
 
 -- The 3rd attempt to get generics conversions.
 
@@ -60,8 +61,18 @@ instance SQLTypeable Int where
 instance SQLTypeable T.Text where
   _genericTypeFromValue _ = StrictType StringType
 
-instance {-# INCOHERENT #-} SQLTypeable String where
-  _genericTypeFromValue _ = StrictType StringType
+instance SQLTypeable Bool where
+  _genericTypeFromValue _ = StrictType BoolType
+
+instance SQLTypeable DataTypeRepr
+instance SQLTypeable DataTypeElementRepr
+
+instance SQLTypeable DataType where
+  _genericTypeFromValue _ = _genericTypeFromValue (undefined :: DataTypeRepr)
+
+
+-- instance {-# INCOHERENT #-} SQLTypeable String where
+--   _genericTypeFromValue _ = StrictType StringType
 
 instance SQLTypeable a => SQLTypeable (Maybe a) where
   _genericTypeFromValue _ = let SQLType dt = buildType :: (SQLType a) in
@@ -71,6 +82,7 @@ instance {-# OVERLAPPABLE #-} SQLTypeable a => SQLTypeable [a] where
   _genericTypeFromValue _ =
     let SQLType dt = buildType :: (SQLType a) in
       (StrictType . ArrayType) dt
+
 
 instance forall a1 a2. (
     SQLTypeable a2,

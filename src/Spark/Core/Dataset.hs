@@ -43,3 +43,4 @@ module Spark.Core.Dataset(
 
 import Spark.Core.Internal.DatasetStructures
 import Spark.Core.Internal.DatasetFunctions
+import Spark.Core.Internal.Projections()

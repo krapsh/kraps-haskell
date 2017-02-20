@@ -15,7 +15,9 @@ import Spark.Core.Internal.DAGFunctions
 At a high level, it is a total function with a number of inputs and a number
 of outputs.
 
-Note about the edges: the edges flow along the path of dependencies.
+Note about the edges: the edges flow along the path of dependencies:
+the inputs are the start points, and the outputs are the end points of the
+graph.
 
 -}
 data ComputeDag v e = ComputeDag {

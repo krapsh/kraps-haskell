@@ -16,6 +16,7 @@ data Cell =
     Empty -- To represent maybe
     | IntElement !Int
     | StringElement !T.Text
+    | BoolElement !Bool
     | RowArray !(Vector Cell) deriving (Show, Eq)
 
 -- | A Row of data: the basic data structure to transport information
@@ -38,6 +39,7 @@ data Row = Row {
 instance ToJSON Cell where
   toJSON Empty = Null
   toJSON (IntElement i) = toJSON i
+  toJSON (BoolElement b) = toJSON b
   toJSON (StringElement s) = toJSON s
   toJSON (RowArray arr) = toJSON arr
 

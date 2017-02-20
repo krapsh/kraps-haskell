@@ -4,46 +4,8 @@
 
 module Spark.Core.Internal.AlgebraStructures where
 
-import Spark.Core.Try
-import Spark.Core.StructuresInternal
-import Spark.Core.Internal.TypesStructures
-
 -- | Algebraic structures that are common to columns and observables.
 
-
-{-| The class of static projections that are guaranteed to succeed
-by using the type system.
-
-from is the type of the dataset (which is also a typed dataset)
-to is the type of the final column.
--}
-data StaticColProjection from to = StaticColProjection {
-  _staticProj :: (SQLType from, FieldPath, SQLType to)
-}
-
-{-| The class of projections that require some runtime introspection
-to confirm that the projection is valid.
--}
-data DynamicColProjection = DynamicColProjection {
-  -- The start type is irrelevant.
-  _dynProjTry :: DataType -> Try (FieldPath, DataType)
-}
-
-{-| The operation of extraction from a Spark object to another
-object.
--}
-class Projection from proj to | from proj -> to where
-  _performProjection :: from -> proj -> to
-
-{-| The projector operation.
-
-This is the general projection operation in Spark. It lets you extract columns
-from datasets or dataframes, or sub-observables form observables.
-
-TODO(kps) put an example here.
--}
-(//) :: forall from proj to. Projection from proj to => from -> proj -> to
-(//) = _performProjection
 
 data BinaryOpFun in1 in2 to = BinaryOpFun {
   bodLift1 :: in1 -> to,

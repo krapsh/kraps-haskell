@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Spark.Core.Internal.TypesFunctions(
   isNullable,
@@ -21,16 +22,23 @@ module Spark.Core.Internal.TypesFunctions(
   -- cellType,
 ) where
 
+import Control.Monad.Except
+import Control.Arrow(second)
+import Data.Function(on)
+import Data.List(sort, nub, sortBy)
+import qualified Data.Map.Strict as M
 import qualified Data.Text as T
-import Data.List(sort, nub)
-import qualified Data.Vector as V
 import Data.Text(Text, intercalate)
+import qualified Data.Vector as V
 import Formatting
 
 
 import Spark.Core.Internal.TypesStructures
 import Spark.Core.StructuresInternal
+import Spark.Core.Internal.RowGenericsFrom(FromSQL(..), TryS)
 import Spark.Core.Internal.Utilities
+import Spark.Core.Internal.TypesStructuresRepr(DataTypeRepr, DataTypeElementRepr)
+import qualified Spark.Core.Internal.TypesStructuresRepr as DTR
 import Spark.Core.Try
 
 -- Performs a cast of the type.
@@ -81,6 +89,72 @@ compatibleTypes :: DataType -> DataType -> Bool
 compatibleTypes (StrictType sdt) (StrictType sdt') = _compatibleTypesStrict sdt sdt'
 compatibleTypes (NullableType sdt) (NullableType sdt') = _compatibleTypesStrict sdt sdt'
 compatibleTypes _ _ = False
+
+-- ***** INSTANCES *****
+
+-- In the case of source introspection, datatypes may be returned.
+instance FromSQL DataType where
+  _cellToValue = _cellToValue >=> _sDataTypeFromRepr
+
+_sDataTypeFromRepr :: DataTypeRepr -> TryS DataType
+_sDataTypeFromRepr (DTR.DataTypeRepr l) = snd <$> _sToTreeRepr l
+
+_sToTreeRepr :: [DataTypeElementRepr] -> TryS (Int, DataType)
+_sToTreeRepr [] = throwError $ sformat "_sToTreeRepr: empty list"
+_sToTreeRepr [dtr] | null (DTR.fieldPath dtr) =
+  -- We are at a leaf, decode the leaf
+  _decodeLeaf dtr []
+_sToTreeRepr l = do
+  let f dtr = case DTR.fieldPath dtr of
+                [] -> []
+                (h : t) -> [(h, dtr')] where dtr' = dtr { DTR.fieldPath = t }
+  let hDtrt = case filter (null . DTR.fieldPath) l of
+          [dtr] -> pure dtr
+          _ ->
+            throwError $ sformat ("_decodeList: invalid top with "%sh) l
+  let withHeads = concatMap f l
+  let g = myGroupBy withHeads
+  let groupst = M.toList g <&> \(h, l') ->
+         _sToTreeRepr l' <&> second (StructField (FieldName h))
+  groups <- sequence groupst
+  checkedGroups <- _packWithIndex groups
+  hDtr <- hDtrt
+  _decodeLeaf hDtr checkedGroups
+
+_packWithIndex :: (Show t) => [(Int, t)] -> TryS [t]
+_packWithIndex l = _check 0 $ sortBy (compare `on` fst) l
+
+-- Checks that all the elements are indexed in order by their value.
+-- It works by running a counter along each element and seeing that it is here.
+_check :: (Show t) => Int -> [(Int, t)] -> TryS [t]
+_check _ [] = pure []
+_check n ((n', x):t) =
+  if n == n'
+  then (x : ) <$> _check (n+1) t
+  else
+    throwError $ sformat ("_check: could not match arguments at index "%sh%" for argument "%sh) n ((n', x):t)
+
+
+_decodeLeaf :: DataTypeElementRepr -> [StructField] -> TryS (Int, DataType)
+_decodeLeaf dtr l = _decodeLeafStrict dtr l <&> \sdt ->
+  if DTR.isNullable dtr
+  then (DTR.fieldIndex dtr, NullableType sdt)
+  else (DTR.fieldIndex dtr, StrictType sdt)
+
+_decodeLeafStrict :: DataTypeElementRepr -> [StructField] -> TryS StrictDataType
+-- The array type
+_decodeLeafStrict dtr [sf] | DTR.typeId dtr == 11 =
+  pure $ ArrayType (structFieldType sf)
+-- Structure types
+_decodeLeafStrict dtr l | DTR.typeId dtr == 10 =
+  pure . Struct . StructType . V.fromList $ l
+_decodeLeafStrict dtr [] =  case DTR.typeId dtr of
+        0 -> pure IntType
+        1 -> pure StringType
+        2 -> pure BoolType
+        n -> throwError $ sformat ("_decodeLeafStrict: unknown type magic id "%sh) n
+_decodeLeafStrict dtr l =
+  throwError $ sformat ("_decodeLeafStrict: cannot interpret dtr="%sh%" and fields="%sh) dtr l
 
 _compatibleTypesStrict :: StrictDataType -> StrictDataType -> Bool
 _compatibleTypesStrict IntType IntType = True
@@ -146,9 +220,6 @@ structTypeFromFields ((hfn, hdt):t) =
   in if numNames == numDistincts
     then return ct
     else tryError $ sformat ("Duplicate field names when building the struct: "%sh) (sort names)
-
-
-
 
 _structFromUnfields :: [(T.Text, DataType)] -> StructType
 _structFromUnfields l = StructType . V.fromList $ x where

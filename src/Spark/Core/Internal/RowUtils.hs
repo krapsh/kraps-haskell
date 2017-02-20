@@ -84,7 +84,8 @@ _j2Cell x (NullableType t) = _j2CellS x t
 --_j2Cell x t = throwError $ sformat ("_j2Cell: Could not match value "%shown%" with type "%shown) x t
 
 _j2CellS :: Value -> StrictDataType -> TryCell
-_j2CellS (String t) StringType = Right . StringElement $ t
+_j2CellS (String t) StringType = pure . StringElement $ t
+_j2CellS (Bool t) BoolType = pure . BoolElement $ t
 _j2CellS (Array v) (ArrayType t) =
   let trys = flip _j2Cell t <$> v in
     RowArray <$> sequence trys

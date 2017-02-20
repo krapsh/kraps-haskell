@@ -2,16 +2,15 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Spark.Core.Internal.DatasetStructures where
 
-import qualified Data.Text as T
 import Data.Vector(Vector)
 
 import Spark.Core.StructuresInternal
 import Spark.Core.Try
 import Spark.Core.Row
-import Spark.Core.Internal.Utilities
 import Spark.Core.Internal.OpStructures
 import Spark.Core.Internal.TypesStructures
 
@@ -188,11 +187,3 @@ instance IsLocality LocDistributed where
 
 instance CheckedLocalityCast LocUnknown where
   _validLocalityValues = [TypedLocality Distributed, TypedLocality Local]
-
-instance forall loc a. CanRename (ComputeNode loc a) String where
-  -- There is no need to update the id, as this field is not involved
-  -- in the calculation of the id.
-  -- TODO: make this fail immediately? If the name is wrong, it is
-  -- harder to figure out what is happening.
-  (@@) cn name = cn { _cnName = Just nn } where
-    nn = NodeName . T.pack $ name

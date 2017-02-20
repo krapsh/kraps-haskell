@@ -8,6 +8,8 @@ module Spark.Core.Internal.OpFunctions(
   extraNodeOpData,
   hashUpdateNodeOp,
   prettyShowColOp,
+  hdfsPath,
+  updateSourceStamp
 ) where
 
 import qualified Data.Text as T
@@ -15,6 +17,7 @@ import qualified Data.Aeson as A
 import qualified Data.Vector as V
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.HashMap.Strict as HM
 import Data.Text(Text)
 import Data.Aeson((.=), toJSON)
 import Data.Char(isSymbol)
@@ -22,6 +25,7 @@ import qualified Crypto.Hash.SHA256 as SHA
 
 import Spark.Core.Internal.OpStructures
 import Spark.Core.Internal.Utilities
+import Spark.Core.Try
 
 -- (internal)
 -- The serialized type of a node operation, as written in
@@ -41,6 +45,7 @@ simpleShowOp (NodeDistributedLit _ _) = "org.spark.Constant"
 simpleShowOp (NodeGroupedReduction _) = "org.spark.GroupedReduction"
 simpleShowOp (NodeReduction _) = "org.spark.Reduction"
 simpleShowOp NodeBroadcastJoin = "org.spark.BroadcastJoin"
+simpleShowOp (NodePointer _) = "org.spark.PlaceholderCache"
 
 -- A human-readable string that represents column operations.
 prettyShowColOp :: ColOp -> T.Text
@@ -50,6 +55,37 @@ prettyShowColOp (ColFunction txt cols) =
 prettyShowColOp (ColLit _ cell) = T.pack (show cell)
 prettyShowColOp (ColStruct s) =
   "struct(" <> T.intercalate "," (prettyShowColOp . tfValue <$> V.toList s) <> ")"
+
+{-| If the node is a reading operation, returns the HdfsPath of the source
+that is going to be read.
+-}
+hdfsPath :: NodeOp -> Maybe HdfsPath
+hdfsPath (NodeDistributedOp so) =
+  if soName so == "org.spark.GenericDatasource"
+  then case soExtra so of
+    A.Object o -> case HM.lookup "inputPath" o of
+      Just (A.String x) -> Just . HdfsPath $ x
+      _ -> Nothing
+    _ -> Nothing
+  else Nothing
+hdfsPath _ = Nothing
+
+{-| Updates the input stamp if possible.
+
+If the node cannot be updated, it is most likely a programming error: an error
+is returned.
+-}
+updateSourceStamp :: NodeOp -> DataInputStamp -> Try NodeOp
+updateSourceStamp (NodeDistributedOp so) (DataInputStamp dis) | soName so == "org.spark.GenericDatasource" =
+  case soExtra so of
+    A.Object o ->
+      let extra' = A.Object $ HM.insert "inputStamp" (A.toJSON dis) o
+          so' = so { soExtra = extra' }
+      in pure $ NodeDistributedOp so'
+    x -> tryError $ "updateSourceStamp: Expected dict, got " <> show' x
+updateSourceStamp x _ =
+  tryError $ "updateSourceStamp: Expected NodeDistributedOp, got " <> show' x
+
 
 _prettyShowAggOp :: AggOp -> T.Text
 _prettyShowAggOp (AggUdaf _ ucn fp) = ucn <> "(" <> show' fp <> ")"
@@ -89,7 +125,16 @@ extraNodeOpData (NodeAggregatorReduction ua) =
   case uaoInitialOuter ua of
     OpaqueAggTransform so -> toJSON (soExtra so)
     InnerAggOp ao -> toJSON ao
-extraNodeOpData _ = A.Null
+extraNodeOpData (NodeOpaqueAggregator so) = soExtra so
+extraNodeOpData (NodeLocalOp so) = soExtra so
+extraNodeOpData NodeBroadcastJoin = A.Null
+extraNodeOpData (NodeReduction _) = A.Null -- TODO: should it send something?
+extraNodeOpData (NodeAggregatorLocalReduction _) = A.Null -- TODO: should it send something?
+extraNodeOpData (NodePointer p) =
+    A.object [
+      "computation" .= toJSON (pointerComputation p),
+      "path" .= toJSON (pointerPath p)
+    ]
 
 -- Adds the content of a node op to a hash.
 -- Right now, this builds the json representation and passes it

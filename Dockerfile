@@ -3,6 +3,11 @@ FROM gibiansky/ihaskell:latest
 # Build:
 # docker build -t ihaskell-krapsh .
 
+# Install pandas for nice visualizations in Python
+WORKDIR /tmp
+RUN pip install pandas
+RUN pip install requests
+
 RUN rm /ihaskell/.stack-work/install/x86_64-linux/nightly-2015-08-15/7.10.2/bin/ihaskell
 
 RUN mkdir /krapsh

@@ -1,20 +1,24 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Spark.Core.Internal.ContextIOInternal(
   returnPure,
   createSparkSession,
   createSparkSession',
   executeCommand1,
-  executeCommand1'
+  executeCommand1',
+  checkDataStamps,
+  updateSourceInfo,
+  createComputation
 ) where
 
 import Control.Concurrent(threadDelay)
 import Control.Lens((^.))
 import Control.Monad.State(mapStateT, get)
-import Control.Monad(forM)
-import Data.Aeson(toJSON)
+import Control.Monad(forM, forM_)
+import Data.Aeson(toJSON, FromJSON)
 import Data.Functor.Identity(runIdentity)
 import Data.Text(Text, pack)
 import qualified Data.Text as T
@@ -24,23 +28,27 @@ import Control.Monad.Trans(lift)
 import Control.Monad.Logger(runStdoutLoggingT, LoggingT, logDebugN, logInfoN, MonadLoggerIO)
 import System.Random(randomIO)
 import Data.Word(Word8)
+import Data.Maybe(mapMaybe)
 import Control.Monad.IO.Class
+import GHC.Generics
 -- import Formatting
 import Network.Wreq.Types(Postable)
 import Data.ByteString.Lazy(ByteString)
+import qualified Data.HashMap.Strict as HM
+import qualified Data.HashSet as HS
 
 import Spark.Core.Dataset
 import Spark.Core.Internal.Client
 import Spark.Core.Internal.ContextInternal
 import Spark.Core.Internal.ContextStructures
-import Spark.Core.Internal.DatasetFunctions(untypedLocalData)
+import Spark.Core.Internal.DatasetFunctions(untypedLocalData, nodePath)
 import Spark.Core.Internal.DatasetStructures(UntypedLocalData)
+import Spark.Core.Internal.OpStructures(DataInputStamp(..))
 import Spark.Core.Row
 import Spark.Core.StructuresInternal
 import Spark.Core.Try
+import Spark.Core.Types
 import Spark.Core.Internal.Utilities
-
-
 
 returnPure :: forall a. SparkStatePure a -> SparkState a
 returnPure p = lift $ mapStateT (return . runIdentity) p
@@ -78,31 +86,104 @@ If any failure is detected that is internal to Krapsh, it returns an error.
 If the error comes from an underlying library (http stack, programming failure),
 an exception may be thrown instead.
 -}
-executeCommand1 :: forall a. (FromSQL a, HasCallStack) =>
+executeCommand1 :: forall a. (FromSQL a) =>
   LocalData a -> SparkState (Try a)
 executeCommand1 ld = do
     tcell <- executeCommand1' (untypedLocalData ld)
     return $ tcell >>= (tryEither . cellToValue)
 
-executeCommand1' :: (HasCallStack) => UntypedLocalData -> SparkState (Try Cell)
+-- The main function to launch computations.
+executeCommand1' :: UntypedLocalData -> SparkState (Try Cell)
 executeCommand1' ld = do
-    session <- get
-    tcomp <- returnPure $ prepareExecution1 ld
-    case tcomp of
-      Left err ->
-        return (Left err)
-      Right comp ->
-        let
-          obss = getTargetNodes comp
-          fun3 ld2 = do
-            result <- _waitSingleComputation session comp (nodeName ld2)
-            return (ld2, result)
-          nodeResults :: SparkState [(LocalData Cell, FinalResult)]
-          nodeResults = sequence (fun3 <$> obss)
-        in do
-          _ <- _sendComputation session comp
-          nrs <- nodeResults
-          returnPure $ storeResults comp nrs
+  logDebugN $ "executeCommand1: computing observable " <> show' ld
+  -- Retrieve the computation graph
+  let cgt = buildComputationGraph ld
+  _ret cgt $ \cg -> do
+    cgWithSourceT <- updateSourceInfo cg
+    _ret cgWithSourceT $ \cgWithSource -> do
+      -- Update the computations with the stamps, and build the computation.
+      compt <- createComputation cgWithSource
+      _ret compt $ \comp -> do
+        -- Run the computation.
+        session <- get
+        _ <- _sendComputation session comp
+        waitForCompletion comp
+
+waitForCompletion :: Computation -> SparkState (Try Cell)
+waitForCompletion comp = do
+  -- We track all the observables, instead of simply the targets.
+  let obss = getObservables comp
+  -- TODO: remove the node name, it is not a good piece of info
+  let trackedNodes = obss <&> \n -> (nodeId n, nodePath n, unSQLType (nodeType n), nodeName n)
+  logDebugN $ "executeCommand1: Tracked nodes are " <> show' trackedNodes
+  nrs' <- _computationMultiStatus (cId comp) HS.empty trackedNodes
+  -- Find the main result again in the list of everything.
+  -- TODO: we actually do not need all the results, just target nodes.
+  let targetNid = case cTerminalNodeIds comp of
+        [nid] -> nid
+        -- TODO: handle the case of multiple terminal targets
+        l -> missing $ "executeCommand1': missing multilist case with " <> show' l
+  case filter (\z -> fst z == targetNid) nrs' of
+    [(_, tc)] -> return tc
+    l -> return $ tryError $ "Expected single result, got " <> show' l
+
+{-| Exposed for debugging -}
+createComputation :: ComputeGraph -> SparkState (Try Computation)
+createComputation cg = returnPure $ prepareComputation cg
+
+{-| Exposed for debugging -}
+updateSourceInfo :: ComputeGraph -> SparkState (Try ComputeGraph)
+updateSourceInfo cg = do
+  let sources = inputSourcesRead cg
+  if null sources
+  then return (pure cg)
+  else do
+    logDebugN $ "executeCommand1: found sources " <> show' sources
+    -- Get the source stamps. Any error at this point is considered fatal.
+    stampsRet <- checkDataStamps sources
+    logDebugN $ "executeCommand1: retrieved stamps " <> show' stampsRet
+    let stampst = sequence $ _f <$> stampsRet
+    let cgt = insertSourceInfo cg =<< stampst
+    return cgt
+
+
+_ret :: Try a -> (a -> SparkState (Try b)) -> SparkState (Try b)
+_ret (Left x) _ = return (Left x)
+_ret (Right x) f = f x
+
+_f :: (a, Try b) -> Try (a, b)
+_f (x, t) = case t of
+                Right u -> Right (x, u)
+                Left e -> Left e
+
+data StampReturn = StampReturn {
+  stampReturnPath :: !Text,
+  stampReturnError :: !(Maybe Text),
+  stampReturn :: !(Maybe Text)
+} deriving (Eq, Show, Generic)
+
+instance FromJSON StampReturn
+
+{-| Given a list of paths, checks each of these paths on the file system of the
+given Spark cluster to infer the status of these resources.
+
+The primary role of this function is to check how recent these resources are
+compared to some previous usage.
+-}
+checkDataStamps :: [HdfsPath] -> SparkState [(HdfsPath, Try DataInputStamp)]
+checkDataStamps l = do
+  session <- get
+  let url = _sessionResourceCheck session
+  status <- liftIO (W.asJSON =<< W.post (T.unpack url) (toJSON l) :: IO (W.Response [StampReturn]))
+  let s = status ^. responseBody
+  return $ mapMaybe _parseStamp s
+
+
+_parseStamp :: StampReturn -> Maybe (HdfsPath, Try DataInputStamp)
+_parseStamp sr = case (stampReturn sr, stampReturnError sr) of
+  (Just s, _) -> pure (HdfsPath (stampReturnPath sr), pure (DataInputStamp s))
+  (Nothing, Just err) -> pure (HdfsPath (stampReturnPath sr), tryError err)
+  _ -> Nothing -- No error being returned for now, we just discard it.
 
 _randomSessionName :: IO Text
 _randomSessionName = do
@@ -139,19 +220,31 @@ _pollMonad rec delayMillis check = do
 
 -- Creates a new session from a string containing a session ID.
 _createSparkSession :: SparkSessionConf -> Text -> Integer -> SparkSession
-_createSparkSession conf sessionId =
-  SparkSession conf sid where
+_createSparkSession conf sessionId idx =
+  SparkSession conf sid idx HM.empty where
     sid = LocalSessionId sessionId
+
+_port :: SparkSession -> Text
+_port = pack . show . confPort . ssConf
 
 -- The URL of the end point
 _sessionEndPoint :: SparkSession -> Text
 _sessionEndPoint sess =
-  let port = (pack . show . confPort . ssConf) sess
+  let port = _port sess
       sid = (unLocalSession . ssId) sess
   in
     T.concat [
       (confEndPoint . ssConf) sess, ":", port,
-      "/session/", sid]
+      "/sessions/", sid]
+
+_sessionResourceCheck :: SparkSession -> Text
+_sessionResourceCheck sess =
+  let port = _port sess
+      sid = (unLocalSession . ssId) sess
+  in
+    T.concat [
+      (confEndPoint . ssConf) sess, ":", port,
+      "/resources_status/", sid]
 
 _sessionPortText :: SparkSession -> Text
 _sessionPortText = pack . show . confPort . ssConf
@@ -165,7 +258,7 @@ _compEndPoint sess compId =
   in
     T.concat [
       (confEndPoint . ssConf) sess, ":", port,
-      "/computation/", sid, "/", cid]
+      "/computations/", sid, "/", cid]
 
 -- The URL of the status of a computation
 _compEndPointStatus :: SparkSession -> ComputationID -> Text
@@ -176,7 +269,7 @@ _compEndPointStatus sess compId =
   in
     T.concat [
       (confEndPoint . ssConf) sess, ":", port,
-      "/status/", sid, "/", cid]
+      "/computations_status/", sid, "/", cid]
 
 -- Ensures that the server has instantiated a session with the given ID.
 _ensureSession :: (MonadLoggerIO m) => SparkSession -> m ()
@@ -201,19 +294,68 @@ _computationStatus session compId nname = do
   let base' = _compEndPointStatus session compId
   let rest = unNodeName nname
   let url = base' <> "/" <> rest
-  logDebugN $ "Sending computations status request at url: " <> url
+  -- logDebugN $ "Sending computations status request at url: " <> url
   _ <- _get url
   -- raw <- _get url
   --logDebugN $ sformat ("Got raw status: "%sh) raw
   status <- liftIO (W.asJSON =<< W.get (T.unpack url) :: IO (W.Response PossibleNodeStatus))
   --logDebugN $ sformat ("Got status: "%sh) status
   let s = status ^. responseBody
-  case s of
-    NodeFinishedSuccess _ -> logInfoN $ rest <> " finished: success"
-    NodeFinishedFailure _ -> logInfoN $ rest <> " finished: failure"
-    _ -> return ()
   return s
 
+-- TODO: not sure how this works when trying to make a fix point: is it going to
+-- blow up the 'stack'?
+_computationMultiStatus ::
+   -- The computation being run
+  ComputationID ->
+  -- The set of nodes that have been processed in this computation, and ended
+  -- with a success.
+  -- TODO: should we do all the nodes processed in this computation?
+  HS.HashSet NodeId ->
+  -- The list of nodes for which we have not had completion information so far.
+  [(NodeId, NodePath, DataType, NodeName)] ->
+  SparkState [(NodeId, Try Cell)]
+_computationMultiStatus _ _ [] = return []
+_computationMultiStatus cid done l = do
+  -- logDebugN $ "_computationMultiStatus: tracking " <> show' l
+  session <- get
+  -- Find the nodes that still need processing (i.e. that have not previously
+  -- finished with a success)
+  let f (nid, _, _, _) = not $ HS.member nid done
+  let needsProcessing = filter f l
+  -- logDebugN $ "_computationMultiStatus: needsProcessing " <> show' needsProcessing
+  -- Poll a bunch of nodes to try to get a status update.
+  let statusl = _try (_computationStatus session cid) <$> needsProcessing :: [SparkState (NodeId, NodePath, DataType, PossibleNodeStatus)]
+  status <- sequence statusl
+  -- logDebugN $ "_computationMultiStatus: retreived status " <> show' status
+  -- Update the state with the new data
+  (updated, statusUpdate) <- returnPure $ updateCache cid status
+  forM_ statusUpdate $ \(p, s) -> case s of
+      NodeCacheSuccess ->
+        logInfoN $ "_computationMultiStatus: " <> prettyNodePath p <> " finished"
+      NodeCacheError ->
+        logInfoN $ "_computationMultiStatus: " <> prettyNodePath p <> " finished (ERROR)"
+      NodeCacheRunning ->
+        logInfoN $ "_computationMultiStatus: " <> prettyNodePath p <> " running"
+  -- logInfoN $ "_computationMultiStatus: updated status " <> show' statusUpdate
+  -- logDebugN $ "_computationMultiStatus: updated status " <> show' updated
+  -- Filter out the updated nodes, so that we do not ask for them again.
+  let updatedNids = HS.union done (HS.fromList (fst <$> updated))
+  let g (nid, _, _, _) = not $ HS.member nid updatedNids
+  let stillNeedsProcessing = filter g needsProcessing
+  -- Do not block uselessly if we have nothing else to do
+  if null stillNeedsProcessing
+  then return updated
+  else do
+    let delayMillis = confPollingIntervalMillis $ ssConf session
+    _ <- liftIO $ threadDelay (delayMillis * 1000)
+    -- TODO: this chaining is certainly not tail-recursive
+    -- How much of a memory leak is it?
+    reminder <- _computationMultiStatus cid updatedNids stillNeedsProcessing
+    return $ updated ++ reminder
+
+_try :: (Monad m) => (y -> m z) -> (x, x', x'', y) -> m (x, x', x'', z)
+_try f (x, x', x'', y) = f y <&> \z -> (x, x', x'', z)
 
 _waitSingleComputation :: (MonadLoggerIO m) =>
   SparkSession -> Computation -> NodeName -> m FinalResult

@@ -10,6 +10,7 @@ module Spark.Core.StructuresInternal(
   NodeId(..),
   FieldName(..),
   FieldPath(..),
+  ComputationID(..),
   catNodePath,
   fieldName,
   unsafeFieldName,
@@ -17,6 +18,7 @@ module Spark.Core.StructuresInternal(
   nullFieldPath,
   headFieldPath,
   fieldPath,
+  prettyNodePath,
 ) where
 
 import qualified Data.Text as T
@@ -35,7 +37,7 @@ import Spark.Core.Internal.Utilities
 newtype NodeName = NodeName { unNodeName :: T.Text } deriving (Eq, Ord)
 
 -- | The user-defined path of the node in the hierarchical representation of the graph.
-newtype NodePath = NodePath { unNodePath :: Vector NodeName } deriving (Eq)
+newtype NodePath = NodePath { unNodePath :: Vector NodeName } deriving (Eq, Ord)
 
 -- | The unique ID of a node. It is based on the parents of the node
 -- and all the relevant intrinsic values of the node.
@@ -49,6 +51,15 @@ newtype FieldName = FieldName { unFieldName :: T.Text } deriving (Eq)
 -- | A path to a nested field an a sql structure.
 -- This structure ensures that proper escaping happens if required.
 newtype FieldPath = FieldPath { unFieldPath :: Vector FieldName } deriving (Eq)
+
+{-| A unique identifier for a computation (a batch of nodes sent for execution
+to Spark).
+-}
+data ComputationID = ComputationID {
+  unComputationID :: !T.Text
+} deriving (Eq, Show, Generic)
+
+
 
 -- | A safe constructor for field names that fixes all the issues relevant to
 -- SQL escaping
@@ -79,6 +90,11 @@ headFieldPath (FieldPath v) = Just $ V.head v
 catNodePath :: NodePath -> T.Text
 catNodePath (NodePath np) =
   T.intercalate "/" (unNodeName <$> V.toList np)
+
+prettyNodePath :: NodePath -> T.Text
+-- Only a single slash, double slashes are reserved for the case
+-- of global paths (including session and computation)
+prettyNodePath np = "/" <> catNodePath np
 
 instance Show NodeId where
   show (NodeId bs) = let s = show bs in
@@ -120,3 +136,6 @@ instance A.ToJSON FieldPath where
 
 instance Ord FieldName where
   compare f1 f2 = compare (unFieldName f1) (unFieldName f2)
+
+instance A.ToJSON ComputationID where
+  toJSON = A.toJSON . unComputationID

@@ -52,9 +52,15 @@ will be found during the analysis phase at runtime.
 type DynColumn = Try (ColumnData UnknownReference Cell)
 
 
--- | (internal)
+-- | (dev)
 -- The type of untyped column data.
 type UntypedColumnData = ColumnData UnknownReference Cell
+
+{-| (dev)
+A column for which the type of the cells is unavailable (at the type level),
+ but for which the origin is available at the type level.
+-}
+type GenericColumn ref = Column ref Cell
 
 {-| A dummy data type that indicates the data referenc is missing.
 -}

@@ -5,7 +5,12 @@ module Spark.Core.Internal.ContextStructures(
   SparkSession(..),
   SparkState,
   SparkStatePure,
-  ComputeGraph
+  ComputeGraph,
+  HdfsPath(..),
+  NodeCacheInfo(..),
+  NodeCacheStatus(..),
+  SparkStateT,
+  SparkStatePureT
 ) where
 
 import Data.Text(Text)
@@ -14,6 +19,8 @@ import Control.Monad.Logger(LoggingT)
 
 import Spark.Core.Internal.Client(LocalSessionId)
 import Spark.Core.Internal.ComputeDag(ComputeDag)
+import Spark.Core.Internal.OpStructures(HdfsPath(..))
+import Spark.Core.Internal.Pruning
 import Spark.Core.Internal.DatasetStructures(UntypedNode, StructureEdge)
 
 -- | The configuration of a remote spark session in krapsh.
@@ -30,25 +37,41 @@ data SparkSessionConf = SparkSessionConf {
   --  - if it already exists on the server, it will be reconnected to
   --
   -- The default value is "" (a new random context name will be chosen).
-  confRequestedSessionName :: !Text
+  confRequestedSessionName :: !Text,
+  {-| If enabled, attempts to prune the computation graph as much as possible.
+
+  This option is useful in interactive sessions when long chains of computations
+  are extracted. This forces the execution of only the missing parts.
+  The algorithm is experimental, so disabling it is a safe option.
+
+  Disabled by default.
+  -}
+  confUseNodePrunning :: !Bool
 } deriving (Show)
 
 -- | A session in Spark.
 -- Encapsualates all the state needed to communicate with Spark
 -- and to perfor some simple optimizations on the code.
 data SparkSession = SparkSession {
-  ssConf :: SparkSessionConf,
-  ssId :: LocalSessionId,
-  ssCommandCounter :: Integer
+  ssConf :: !SparkSessionConf,
+  ssId :: !LocalSessionId,
+  ssCommandCounter :: !Integer,
+  ssNodeCache :: !NodeCache
 } deriving (Show)
+
+
 
 -- | Represents the state of a session and accounts for the communication
 -- with the server.
-type SparkState a = LoggingT (StateT SparkSession IO) a
+type SparkState a = SparkStateT IO a
 
 -- More minimalistic state transforms when doing pure evaluation.
 -- (internal type)
+-- TODO: use the transformer
 type SparkStatePure x = State SparkSession x
+
+type SparkStatePureT m = StateT SparkSession m
+type SparkStateT m = LoggingT (SparkStatePureT m)
 
 {-| internal
 

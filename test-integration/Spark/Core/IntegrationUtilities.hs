@@ -50,6 +50,12 @@ data TestStruct6 = TestStruct6 {
   ts6f3 :: TestStruct3
 } deriving (Show, Eq, Generic)
 
+data TestStruct7 = TestStruct7 {
+  ts7f1 :: Text
+} deriving (Show, Eq, Generic)
+instance ToSQL TestStruct7
+instance SQLTypeable TestStruct7
+
 newtype TestT1 = TestT1 {
   unTestT1 :: Int
 } deriving (Eq, Show, Generic, Num)

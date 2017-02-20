@@ -18,11 +18,10 @@ import Spark.Core.Internal.DatasetFunctions
 import Spark.Core.Internal.OpStructures
 import Spark.Core.Internal.PathsUntyped()
 import Spark.Core.Internal.DAGStructures
-import Spark.Core.Internal.Utilities
 import Spark.Core.StructuresInternal
 
 cachingType :: UntypedNode -> CacheTry NodeCachingType
-cachingType n = traceHint ("cachingType: n="<>show' (nodeOp n)<>" res=") $ case nodeOp n of
+cachingType n = case nodeOp n of
   NodeLocalOp _ -> pure Stop
   NodeAggregatorReduction _ -> pure Stop
   NodeAggregatorLocalReduction _ -> pure Stop
@@ -42,6 +41,7 @@ cachingType n = traceHint ("cachingType: n="<>show' (nodeOp n)<>" res=") $ case 
   NodeBroadcastJoin -> pure Through
   NodeGroupedReduction _ -> pure Stop
   NodeReduction _ -> pure Stop
+  NodePointer _ -> pure Stop -- It is supposed to be an observable
 
 autocacheGen :: AutocacheGen UntypedNode
 autocacheGen = AutocacheGen {

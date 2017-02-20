@@ -10,6 +10,7 @@ Most krapsh manipulations are converted into graph manipulations.
 -}
 module Spark.Core.Internal.DAGFunctions(
   DagTry,
+  FilterOp(..),
   -- Building
   buildGraph,
   buildVertexList,
@@ -25,6 +26,7 @@ module Spark.Core.Internal.DAGFunctions(
   graphMapEdges,
   reverseGraph,
   verticesAndEdges,
+  graphFilterVertices
 ) where
 
 import qualified Data.Set as S
@@ -45,6 +47,14 @@ import Spark.Core.Internal.Utilities
 -- | Separate type of error to make it more general and easier
 -- to test.
 type DagTry a = Either Text a
+
+{-| The different filter modes when pruning a graph.
+
+Keep: keep the current node.
+CutChildren: keep the current node, but do not consider the children.
+Remove: remove the current node, do not consider the children.
+-}
+data FilterOp = Keep | Remove | CutChildren
 
 {-| Starts from a vertex and expands the vertex to reach all the transitive
 closure of the vertex.
@@ -298,6 +308,25 @@ graphMapVertices' f g =
   runIdentity (graphMapVertices g f') where
     f' v _ = return $ f v
 
+{-| Given a graph, prunes out a subset of vertices.
+
+All the corresponding edges and the unreachable chunks of the graph are removed.
+-}
+graphFilterVertices :: (Show v, Show e) =>
+  (v -> FilterOp) -> Graph v e -> Graph v e
+graphFilterVertices f g =
+  -- Tag all the vertices that we are going to remove first.
+  let f' v l = return $ _transFilter f v l
+      g' = runIdentity (graphMapVertices g f')
+      -- In a second step, directly remove all these elements from the graph.
+      -- TODO: use more recent version of Vector.
+      vxs = V.fromList $ mapMaybe _filt (V.toList (gVertices g'))
+      keptIds = S.fromList $ V.toList (vertexId <$> vxs)
+      eds = M.mapMaybeWithKey (_filtEdge keptIds) (gEdges g)
+  -- We are guaranteed that the result is still a DAG.
+  in Graph eds vxs
+
+
 -- | The map of vertices, by vertex id.
 vertexMap :: Graph v e -> M.Map VertexId v
 vertexMap g =
@@ -313,3 +342,38 @@ verticesAndEdges g =
         l = V.toList $ M.findWithDefault V.empty (vertexId vx) (gEdges g)
         lres = [(vertexData vx', edgeData e') | (VertexEdge vx' e') <- l]
     in (lres, n)
+
+_transFilter :: (Show v, Show e) => (v -> FilterOp) -> v -> [(FilterVertex v, e)] -> FilterVertex v
+_transFilter filt vx l = traceHint ("_transFilter: vx=" <> show' vx <> " l=" <> show' l<>" res=") $
+  let f (KeepVertex _, _) = True
+      f (DropChildren _, _) = False
+      f (RemoveVertex _, _) = False
+      -- If the current node is reachable:
+      -- If the node has no child, we do not make checks on the parents.
+      -- (it is considered to be reachable)
+      reachableChildren = null l || or (f <$> l)
+  in if reachableChildren
+      then case filt vx of
+          Keep -> KeepVertex vx
+          CutChildren -> DropChildren vx
+          Remove -> RemoveVertex vx
+      -- The node is unreachable, just drop
+     else RemoveVertex vx
+
+_filt :: Vertex (FilterVertex v) -> Maybe (Vertex v)
+_filt (Vertex vid (KeepVertex v)) = Just (Vertex vid v)
+_filt (Vertex vid (DropChildren v)) = Just (Vertex vid v)
+_filt (Vertex _ (RemoveVertex _)) = Nothing
+
+
+_filtEdge :: S.Set VertexId -> VertexId -> V.Vector (VertexEdge e v) -> Maybe (V.Vector (VertexEdge e v))
+-- The start vertex has been pruned out.
+_filtEdge s vid _ | not (S.member vid s) = Nothing
+_filtEdge s _ v =
+  let f ve = S.member (vertexId . veEndVertex $ ve) s
+      v' = V.filter f v
+  in if V.null v'
+     then Nothing
+     else Just v'
+
+data FilterVertex v = KeepVertex !v | DropChildren !v | RemoveVertex !v deriving (Show)

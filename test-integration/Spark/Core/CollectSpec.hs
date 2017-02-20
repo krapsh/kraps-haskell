@@ -36,6 +36,11 @@ run s f = it s $ do
 spec :: Spec
 spec = do
   describe "Integration test - collect on ints" $ do
+    run "running_twice" $ do
+      let ds = dataset [1::Int,2]
+      l2 <- exec1Def $ collect (asCol ds)
+      l2' <- exec1Def $ collect (asCol ds)
+      l2 `shouldBe` l2'
     run "empty_ints1" $
       collectIdempotent ([] :: [Int])
     run "ints1" $

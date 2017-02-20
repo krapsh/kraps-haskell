@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Spark.Core.ProjectionsSpec where
 
@@ -73,37 +74,37 @@ spec = do
     it "should get a node" $ do
       ds `shouldBe` ds1
     it "Failing dynamic projection on dataframe" $ do
-      df1//"xx" `shouldSatisfy` isLeft
+      df1/-"xx" `shouldSatisfy` isLeft
     it "Failing dynamic projection on dataset" $ do
-      ds1//"xx" `shouldSatisfy` isLeft
+      ds1/-"xx" `shouldSatisfy` isLeft
     it "Basic arithmetic on DS cols" $ do
       let c1 = ds1//treeWidth'
       let c2 = (c1 + c1)
       (show c2) `shouldSatisfy` ("sum(treeWidth, treeWidth){int}" `isPrefixOf`)
     it "Basic arithmetic on DF cols" $ do
-      let c1 = df1//treeWidth'
+      let c1 = df1 // treeWidth'
       let c2 = c1 + c1
       (show c2) `shouldSatisfy` ("Right sum(treeWidth, treeWidth){int}" `isPrefixOf`)
     it "Construction of ds2" $ do
-      let str = struct' [ (df1//"treeId") @@ "sTreeId",
-                          (df1//"treeWidth") @@ "sTreeWidth",
-                          (df1//"treeHeight") @@ "sTreeHeight"]
+      let str = struct' [ (df1/-"treeId") @@ "sTreeId",
+                          (df1/-"treeWidth") @@ "sTreeWidth",
+                          (df1/-"treeHeight") @@ "sTreeHeight"]
       let df2 = pack' str
       let ds2 = traceHint (T.pack "ds2=") $ asDS df2 :: Try (Dataset STree)
       ds2 `shouldSatisfy` isRight
     it "Static construction of ds2" $ do
       let ds2 = do
-              idCol <- castCol' (buildType::SQLType MyId) (df1//"treeId")
-              widthCol <- castCol' (buildType::SQLType Height) (df1//"treeWidth")
-              heightCol <- castCol' (buildType::SQLType Int) (df1//"treeWidth")
+              idCol <- castCol' (buildType::SQLType MyId) (df1/-"treeId")
+              widthCol <- castCol' (buildType::SQLType Height) (df1/-"treeWidth")
+              heightCol <- castCol' (buildType::SQLType Int) (df1/-"treeWidth")
               let s = pack (idCol, widthCol, heightCol) :: Dataset STree
               return $ traceHint (T.pack "ds2=") s
       ds2 `shouldSatisfy` isRight
     it "Basic arithmetic on DS cols 1" $ do
       let ds2' = do
-              idCol <- castCol' (buildType::SQLType MyId) (df1//"treeId")
-              widthCol <- castCol' (buildType::SQLType Height) (df1//"treeWidth")
-              heightCol <- castCol' (buildType::SQLType Int) (df1//"treeWidth")
+              idCol <- castCol' (buildType::SQLType MyId) (df1/-"treeId")
+              widthCol <- castCol' (buildType::SQLType Height) (df1/-"treeWidth")
+              heightCol <- castCol' (buildType::SQLType Int) (df1/-"treeWidth")
               let s = pack (idCol, widthCol, heightCol) :: Dataset STree
               return $ traceHint (T.pack "ds2=") s
       let ds2 = forceRight ds2'

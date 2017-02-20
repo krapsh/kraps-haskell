@@ -22,7 +22,8 @@ module Spark.Core.Context(
   createSparkSessionDef,
   closeSparkSessionDef,
   exec1Def,
-  exec1Def'
+  exec1Def',
+  execStateDef
   ) where
 
 import Data.Text(pack)
@@ -40,5 +41,6 @@ defaultConf =
     confEndPoint = pack "http://127.0.0.1",
     confPort = 8081,
     confPollingIntervalMillis = 500,
-    confRequestedSessionName = ""
+    confRequestedSessionName = "",
+    confUseNodePrunning = False -- Disable graph pruning by default
   }
