@@ -123,17 +123,17 @@ _sToTreeRepr l = do
   _decodeLeaf hDtr checkedGroups
 
 _packWithIndex :: (Show t) => [(Int, t)] -> TryS [t]
-_packWithIndex l = _check $ sortBy (compare `on` fst) l
+_packWithIndex l = _check 0 $ sortBy (compare `on` fst) l
 
-_check :: (Show t) => [(Int, t)] -> TryS [t]
-_check [] = pure []
-_check [(0, x)] = pure [x]
-_check [(p, x)] = throwError $ sformat ("_check: should be zero "%sh) (p, x)
-_check ((idx1, x1) : (idx2, x2) : t) =
-  if idx1 == idx2 + 1
-  then (x1 : ) <$> _check ((idx2, x2) : t)
+-- Checks that all the elements are indexed in order by their value.
+-- It works by running a counter along each element and seeing that it is here.
+_check :: (Show t) => Int -> [(Int, t)] -> TryS [t]
+_check _ [] = pure []
+_check n ((n', x):t) =
+  if n == n'
+  then (x : ) <$> _check (n+1) t
   else
-    throwError $ sformat ("_check: could not match arguments for "%sh) ((idx1, x1) : (idx2, x2) : t)
+    throwError $ sformat ("_check: could not match arguments at index "%sh%" for argument "%sh) n ((n', x):t)
 
 
 _decodeLeaf :: DataTypeElementRepr -> [StructField] -> TryS (Int, DataType)

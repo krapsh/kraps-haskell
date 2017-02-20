@@ -38,7 +38,7 @@ class Projection from proj to | from proj -> to where
 {-| The projector operation.
 
 This is the general projection operation in Spark. It lets you extract columns
-from datasets or dataframes, or sub-observables form observables.
+from datasets or dataframes, or sub-observables from observables.
 
 TODO(kps) put an example here.
 -}
