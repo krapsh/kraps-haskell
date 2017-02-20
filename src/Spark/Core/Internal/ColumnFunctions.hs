@@ -19,10 +19,24 @@ module Spark.Core.Internal.ColumnFunctions(
   iUntypedColData,
   iEmptyCol,
   -- Developer API (projections)
-  unsafeStaticProjection,
-  dynamicProjection,
+  -- unsafeStaticProjection,
   dropColReference,
   dropColType,
+  extractPathUnsafe,
+  colExtraction,
+  unsafeProjectCol,
+  -- -- Developer API (projection builders)
+  -- dynamicProjection,
+  -- stringToDynColProj,
+  -- pathToDynColProj,
+  -- colStaticProjToDynProj,
+  -- -- Developer API (projection transformers)
+  -- projectDSDyn,
+  -- projectDFDyn,
+  -- projectDsCol,
+  -- projectColCol,
+  -- projectColDynCol,
+  -- projectDColDCol,
   -- Public functions
   untypedCol,
   colFromObs,
@@ -56,32 +70,6 @@ import Spark.Core.Internal.Utilities
 
 -- ********** Public methods ********
 
-{-| Lets the users define their own static projections.
-
-Throws an error if the type cannot be found, so should be used with caution.
-
-String has to be used because of type inferrence issues
--}
-unsafeStaticProjection :: forall from to. (HasCallStack) =>
-  SQLType from     -- ^ The start type
-  -> String        -- ^ The name of a field assumed to be found in the start type.
-                   --   This only has to be valid for Spark purposes, not
-                   --   internal Haskell representation.
-  -> StaticColProjection from to
-unsafeStaticProjection sqlt field =
-  let
-    f = forceRight . fieldPath . T.pack $ field
-    sqlt' = fromMaybe
-      (failure $ sformat ("unsafeStaticProjection: Cannot find the field "%sh%" in type "%sh) field sqlt)
-      (_extractPath sqlt f)
-  in StaticColProjection (sqlt, f, sqlt')
-
--- Returns a projection from a path (even if invalid data)
-dynamicProjection :: String -> DynamicColProjection
-dynamicProjection txt = case fieldPath (T.pack txt) of
-  Left msg -> DynamicColProjection $ \_ ->
-    tryError $ sformat ("dynamicProjection: invalid syntax for path "%shown%": "%shown) txt msg
-  Right fpath -> _dynamicProjection fpath
 
 {-| The type of a column.
 -}
@@ -158,65 +146,9 @@ colFieldName c =
 
 -- ********* Projection operations ***********
 
--- dataset -> static projection -> column
-instance forall a to. Projection (Dataset a) (StaticColProjection a to) (Column a to) where
-  _performProjection = _project
 
--- dataset -> dynamic projection -> DynColumn
-instance forall a. Projection (Dataset a) DynamicColProjection DynColumn where
-  _performProjection = _projectDyn
+-- ****** Functions that build projections *******
 
--- dataset -> string -> DynColumn
-instance forall a . Projection (Dataset a) String DynColumn where
-  _performProjection ds s = _projectDyn ds (_strToDynProj s)
-
--- dataframe -> dynamic projection -> dyncolumn
-instance Projection DataFrame DynamicColProjection DynColumn where
-  _performProjection = _projectDF
-
--- dataframe -> static projection -> dyncolumn
--- This is a relaxation as we could return Try (Column to) intead.
--- It makes more sense from an API perspective to just return a dynamic result.
-instance forall a to. Projection DataFrame (StaticColProjection a to) DynColumn where
-  _performProjection df proj = _projectDF df (_colStaticProjToDynProj proj)
-
--- dataframe -> string -> dyncolumn
-instance Projection DataFrame String DynColumn where
-  _performProjection df s = _projectDF df (_strToDynProj s)
-
--- column -> static projection -> column
-instance forall ref a to. Projection (Column ref a) (StaticColProjection a to) (Column ref to) where
-  _performProjection = _projectCol
-
-
--- dyncolumn -> dynamic projection -> dyncolumn
-instance Projection DynColumn DynamicColProjection DynColumn where
-  _performProjection = _projectDynCol
-
-instance forall a to. Projection DynColumn (StaticColProjection a to) DynColumn where
-  _performProjection dc proj = _projectDynCol dc (_colStaticProjToDynProj proj)
-
--- dyncolumn -> string -> dyncolumn
-instance Projection DynColumn String DynColumn where
-  _performProjection dc s = _performProjection dc (_strToDynProj s)
-
-_strToDynProj :: String -> DynamicColProjection
-_strToDynProj s =
-  let
-    fun dt =
-      case fieldPath (T.pack s) of
-        Right fp -> _dynProjTry (_dynamicProjection fp) dt
-        Left msg -> tryError (T.pack msg)
-  in DynamicColProjection fun
-
--- | Converts a static project to a dynamic projector.
-_colStaticProjToDynProj :: forall from to. StaticColProjection from to -> DynamicColProjection
-_colStaticProjToDynProj (StaticColProjection (SQLType dtFrom, fp, SQLType dtTo)) =
-  DynamicColProjection $ \dt ->
-    -- TODO factorize this as a projection on types.
-    if dt /= dtFrom then
-      tryError $ sformat ("Cannot convert type "%shown%" into type "%shown) dt dtFrom
-    else pure (fp, dtTo)
 
 iUntypedColData :: Column ref a -> UntypedColumnData
 iUntypedColData = _unsafeCastColData . dropColReference
@@ -236,38 +168,12 @@ _checkedCastRefColData _ cd =
   -- TODO: do some dynamic checks on the origin.
   pure $ cd { _cType = _cType cd }
 
-_dynamicProjection :: FieldPath -> DynamicColProjection
-_dynamicProjection fpath =
-  let
-    fun dt = case _extractPath (SQLType dt) fpath of
-        Just (SQLType dt') -> pure (fpath, dt') -- TODO(kps) I have a doubt
-        Nothing ->
-          tryError $ sformat ("unsafeStaticProjection: Cannot find the field "%shown%" in type "%shown) fpath dt
-   in DynamicColProjection fun
 
--- TODO: take a compute node instead
-_projectDyn :: Dataset from -> DynamicColProjection -> DynColumn
-_projectDyn ds proj = do
-  (p, dt) <- _dynProjTry proj (unSQLType . nodeType $ ds)
-  _emptyDynCol ds dt p
-
-_projectDF :: DataFrame -> DynamicColProjection -> DynColumn
-_projectDF df proj = do
-  node <- df
-  _projectDyn node proj
-
-_project :: Dataset from -> StaticColProjection from to -> Column from to
-_project ds proj = let (_, p, sqlt) = _staticProj proj in
-  iEmptyCol ds sqlt p
-
-_projectCol :: Column ref from -> StaticColProjection from to -> Column ref to
-_projectCol c (StaticColProjection (_, fp, SQLType dt)) =
-  _projectColData0 c fp dt
 
 -- Performs the data projection. This is unsafe, it does not check that the
 -- field path is valid in this case, nor that the final type is valid either.
-_projectColData0 :: ColumnData ref a -> FieldPath -> DataType -> ColumnData ref b
-_projectColData0 cd (FieldPath p) dtTo =
+unsafeProjectCol :: ColumnData ref a -> FieldPath -> DataType -> ColumnData ref b
+unsafeProjectCol cd (FieldPath p) dtTo =
   -- If the column is already a projection, flatten it.
   case colOp cd of
     -- No previous parent on an extraction -> we can safely append to that one.
@@ -279,17 +185,9 @@ _projectColData0 cd (FieldPath p) dtTo =
       cd { _cOp = ColExtraction (FieldPath p),
           _cType = dtTo}
 
-_projectDynColData :: ColumnData ref a -> DynamicColProjection -> DynColumn
-_projectDynColData cd proj =
-  _dynProjTry proj (_cType cd) <&> uncurry (_projectColData0 . dropColReference $ cd)
 
-_projectDynCol :: DynColumn -> DynamicColProjection -> DynColumn
-_projectDynCol c proj = do
-  cd <- c
-  _projectDynColData cd proj
-
-_extractPath :: SQLType from -> FieldPath -> Maybe (SQLType to)
-_extractPath sqlt (FieldPath v) = _extractPath0 sqlt (V.toList v)
+extractPathUnsafe :: SQLType from -> FieldPath -> Maybe (SQLType to)
+extractPathUnsafe sqlt (FieldPath v) = _extractPath0 sqlt (V.toList v)
 
 _extractPath0 :: SQLType from -> [FieldName] -> Maybe (SQLType to)
 _extractPath0 sqlt [] = Just (unsafeCastType sqlt)
@@ -316,8 +214,8 @@ iEmptyCol :: Dataset a -> SQLType b -> FieldPath -> Column a b
 iEmptyCol = _emptyColData
 
 -- | (internal) Creates a new column with a dynamic type.
-_emptyDynCol :: Dataset a -> DataType -> FieldPath -> DynColumn
-_emptyDynCol ds dt fp = Right $ dropColReference $ _emptyColData ds (SQLType dt) fp
+colExtraction :: Dataset a -> DataType -> FieldPath -> DynColumn
+colExtraction ds dt fp = Right $ dropColReference $ _emptyColData ds (SQLType dt) fp
 
 -- A new column data structure.
 _emptyColData :: Dataset a -> SQLType b -> FieldPath -> ColumnData a b

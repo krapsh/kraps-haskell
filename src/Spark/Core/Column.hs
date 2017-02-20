@@ -40,3 +40,4 @@ import Spark.Core.Internal.ColumnStructures
 import Spark.Core.Internal.ColumnFunctions
 import Spark.Core.Internal.AlgebraStructures
 import Spark.Core.Internal.FunctionsInternals
+import Spark.Core.Internal.Projections
