@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -7,6 +5,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE RankNTypes #-}
+-- {-# LANGUAGE UndecidableInstances #-}
 
 -- TODO(kps): this module stretches my understanding of Haskell.
 -- There is probably better than that.
@@ -19,18 +19,13 @@ data.
 module Spark.Core.Internal.Projections where
 
 import qualified Data.Text as T
-import qualified Data.Text.Format as TF
-import qualified Data.Vector as V
-import Data.String(IsString(fromString))
-import Data.Text.Lazy(toStrict)
 import Data.Maybe(fromMaybe)
-import Data.List(find)
 import Formatting
+import Data.Text(Text)
 
 import Spark.Core.Try
 import Spark.Core.StructuresInternal
 import Spark.Core.Internal.TypesStructures
-import Spark.Core.Internal.AlgebraStructures
 import Spark.Core.Internal.ColumnFunctions
 import Spark.Core.Internal.ColumnStructures
 import Spark.Core.Internal.DatasetFunctions
@@ -69,10 +64,97 @@ from datasets or dataframes, or sub-observables from observables.
 
 TODO(kps) put an example here.
 -}
-(//) :: forall from proj to. Projection from proj to => from -> proj -> to
-(//) = _performProjection
+(//) :: forall from proj. Project from proj => from -> proj -> (ProjectReturn from proj)
+(//) = _performProject
+-- (//) :: forall from proj to. Projection from proj to => from -> proj -> to
+-- (//) = _performProjection
+
+{-| The projector operation for string.
+
+This is the general projection operation in Spark. It lets you extract columns
+from datasets or dataframes, or sub-observables from observables.
+
+Because of a Haskell limitation, this operator is different for strings.
+
+TODO(kps) put an example here.
+-}
+(/-) :: forall from. Project from Text => from -> Text -> (ProjectReturn from Text)
+(/-) = _performProject
 
 
+data Foo
+data Bar
+
+type family TextProjectReturn from where
+
+
+type family ProjectReturn from proj where
+  ProjectReturn DataFrame DynamicColProjection = DynColumn
+  ProjectReturn DataFrame (StaticColProjection from to) = DynColumn
+  ProjectReturn DataFrame Text = DynColumn
+  ProjectReturn DynColumn DynamicColProjection = DynColumn
+  ProjectReturn DynColumn Text = DynColumn
+  ProjectReturn (Dataset x) DynamicColProjection = DynColumn
+  ProjectReturn (Dataset x) (StaticColProjection x y) = Column x y
+  ProjectReturn (Dataset _) Text = DynColumn
+
+
+class MyString x where
+  convertToText :: x -> Text
+
+instance (a ~ Text) => MyString a where
+  convertToText = id
+
+class Project from proj where
+  _performProject :: from -> proj -> ProjectReturn from proj
+
+instance Project DynColumn DynamicColProjection where
+  _performProject = projectDColDCol
+
+instance Project DataFrame DynamicColProjection where
+  _performProject = projectDFDyn
+
+instance forall a b. Project DataFrame (StaticColProjection a b) where
+  _performProject df proj = projectDFDyn df (colStaticProjToDynProj proj)
+
+instance forall a b. Project (Dataset a) (StaticColProjection a b) where
+  _performProject = projectDsCol
+
+instance forall a. Project (Dataset a) DynamicColProjection where
+  _performProject = projectDSDyn
+
+instance Project DynColumn Text where
+  _performProject dc s =
+    let s' = T.unpack $ convertToText s
+    in _performProjection dc (stringToDynColProj s')
+
+instance Project DataFrame Text where
+  _performProject df s =
+    let s' = T.unpack $ convertToText s
+    in projectDFDyn df (stringToDynColProj s')
+
+instance Project (Dataset a) Text where
+  _performProject ds s =
+    let s' = T.unpack $ convertToText s
+    in projectDSDyn ds (stringToDynColProj s')
+
+--
+-- test =
+--   let dyn1 = undefined :: DynColumn
+--       pdyn1 = undefined :: DynamicColProjection
+--       p = undefined :: StaticColProjection Foo Bar
+--       ds1 = undefined :: Dataset Foo
+--       foo = undefined :: Foo
+--       df1 = undefined :: DataFrame
+--       dyn2 = dyn1 // pdyn1
+--       dyn3 = dyn1/-"ab"/-"cd"
+--       dyn4 = dyn1 // pdyn1 // pdyn1
+--       cdyn1 = df1/-"ab"//pdyn1
+--       ds2 = ds1 // p
+--       -- dyn4 = dyn1 /// foo
+--   in ds2
+
+-- instance Project
 
 -- dataset -> static projection -> column
 instance forall a to. Projection (Dataset a) (StaticColProjection a to) (Column a to) where

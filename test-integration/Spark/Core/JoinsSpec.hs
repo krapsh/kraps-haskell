@@ -1,4 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Spark.Core.JoinsSpec where
 
@@ -19,6 +20,6 @@ spec = do
       let ds2 = dataset [(1,3)] :: Dataset (Int, Int)
       let df1 = asDF ds1
       let df2 = asDF ds2
-      let df = joinInner' (df1//"_1") (df1//"_2") (df2//"_1") (df2//"_2" @@ "_3")
+      let df = joinInner' (df1/-"_1") (df1/-"_2") (df2/-"_1") (df2/-"_2" @@ "_3")
       res <- exec1Def' (collect' (asCol' df))
       res `shouldBe` rowArray [rowArray [IntElement 1, IntElement 2, IntElement 3]]

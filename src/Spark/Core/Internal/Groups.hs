@@ -35,6 +35,7 @@ import Spark.Core.Internal.Utilities
 import Spark.Core.Internal.RowStructures(Cell)
 import Spark.Core.Try
 import Spark.Core.StructuresInternal
+import Spark.Core.Internal.CanRename
 
 {-| A dataset that has been partitioned according to some given field.
 -}

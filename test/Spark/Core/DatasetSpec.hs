@@ -1,6 +1,4 @@
--- {-# LANGUAGE OverloadedStrings #-}
--- {-# LANGUAGE ExtendedDefaultRules #-}
-
+{-# LANGUAGE OverloadedStrings #-}
 
 module Spark.Core.DatasetSpec where
 
@@ -43,7 +41,7 @@ spec = do
   describe "column syntax" $
     it "should not explode" $ do
       let ds = dataset ([1 ,2, 3]::[Int])
-      let c1 = ds // "c1"
+      let c1 = ds/-"c1"
       c1 `shouldBe` c1
 
   describe "Logical dependencies" $ do

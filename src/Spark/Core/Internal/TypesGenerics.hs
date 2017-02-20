@@ -71,8 +71,8 @@ instance SQLTypeable DataType where
   _genericTypeFromValue _ = _genericTypeFromValue (undefined :: DataTypeRepr)
 
 
-instance {-# INCOHERENT #-} SQLTypeable String where
-  _genericTypeFromValue _ = StrictType StringType
+-- instance {-# INCOHERENT #-} SQLTypeable String where
+--   _genericTypeFromValue _ = StrictType StringType
 
 instance SQLTypeable a => SQLTypeable (Maybe a) where
   _genericTypeFromValue _ = let SQLType dt = buildType :: (SQLType a) in

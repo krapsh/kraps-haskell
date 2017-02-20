@@ -4,10 +4,6 @@
 
 module Spark.Core.Internal.AlgebraStructures where
 
-import Spark.Core.Try
-import Spark.Core.StructuresInternal
-import Spark.Core.Internal.TypesStructures
-
 -- | Algebraic structures that are common to columns and observables.
 
 

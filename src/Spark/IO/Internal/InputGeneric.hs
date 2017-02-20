@@ -19,7 +19,7 @@ import qualified Data.Map.Strict as M
 import qualified Data.Aeson as A
 import qualified Data.Text as T
 import Data.Aeson(toJSON, (.=))
-import Debug.Trace
+-- import Debug.Trace
 
 import Spark.Core.Types
 import Spark.Core.Context
@@ -139,9 +139,9 @@ _inferSchema = executeCommand1 . _inferSchemaCmd
 -- aggregator.
 _inferSchemaCmd :: SourceDescription -> LocalData DataType
 _inferSchemaCmd sd = emptyLocalData no sqlt where
-  sqlt = traceHint "_inferSchemaCmd: sqlt" $ buildType :: SQLType DataType
+  sqlt = traceHint "_inferSchemaCmd: sqlt" buildType :: SQLType DataType
   dt = traceHint "_inferSchemaCmd: dt" $ unSQLType sqlt
-  so = traceHint "_inferSchemaCmd: so" $ StandardOperator {
+  so = traceHint "_inferSchemaCmd: so" StandardOperator {
       soName = "org.spark.InferSchema",
       soOutputType = dt,
       soExtra = A.toJSON sd

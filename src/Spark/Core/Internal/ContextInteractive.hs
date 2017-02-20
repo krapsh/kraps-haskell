@@ -36,7 +36,6 @@ import Spark.Core.Internal.DatasetFunctions(untypedLocalData)
 import Spark.Core.Internal.ContextIOInternal
 import Spark.Core.Internal.RowGenericsFrom(FromSQL, cellToValue)
 import Spark.Core.Internal.RowStructures(Cell)
-import Spark.Core.Internal.Utilities
 import Spark.Core.StructuresInternal
 import Spark.Core.Try
 
@@ -81,12 +80,12 @@ This is the most unsafe way of running a command:
 it executes a command using the default spark session, and
 throws an exception if any error happens.
  -}
-exec1Def :: (FromSQL a, HasCallStack) => LocalData a -> IO a
+exec1Def :: (FromSQL a) => LocalData a -> IO a
 exec1Def ld = do
   c <- exec1Def' (pure (untypedLocalData ld))
   _forceEither $ cellToValue c
 
-exec1Def' :: (HasCallStack) => LocalFrame -> IO Cell
+exec1Def' :: LocalFrame -> IO Cell
 exec1Def' lf = do
   ld <- _getOrThrow lf
   res <- execStateDef (executeCommand1' ld)

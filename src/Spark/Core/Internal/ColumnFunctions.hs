@@ -258,36 +258,6 @@ instance forall ref a. Show (Column ref a) where
       nn = unNodeName . nodeName . _cOrigin $ c
     in T.unpack $ toStrict $ TF.format txt (name, fields, nn)
 
--- *********** Renaming instances **************
-
-instance forall ref a. CanRename (ColumnData ref a) FieldName where
-  c @@ fn = c { _cReferingPath = Just fn }
-
-
-instance forall ref a. CanRename (Column ref a) String where
-  c @@ str = case fieldName (T.pack str) of
-    Right fp -> c @@ fp
-    Left msg ->
-      -- The syntax check here is pretty lenient, so it fails, it has
-      -- some good reasons. We stop here.
-      failure $ sformat ("Could not make a field path out of string "%shown%" for column "%shown%":"%shown) str c msg
-
-instance CanRename DynColumn FieldName where
-  (Right cd) @@ fn = Right (cd @@ fn)
-  -- TODO better error handling
-  x @@ _ = x
-
-instance CanRename DynColumn String where
-  -- An error could happen when making a path out of a string.
-  (Right cd) @@ str = case fieldName (T.pack str) of
-    Right fp -> Right $ cd @@ fp
-    Left msg ->
-      -- The syntax check here is pretty lenient, so it fails, it has
-      -- some good reasons. We stop here.
-      tryError $ sformat ("Could not make a field path out of string "%shown%" for column "%shown%":"%shown) str cd msg
-  -- TODO better error handling
-  x @@ _ = x
-
 -- *********** Arithmetic operations **********
 
 

@@ -12,7 +12,6 @@ module Spark.Core.Internal.Utilities(
   pretty,
   myGroupBy,
   myGroupBy',
-  CanRename(..),
   missing,
   failure,
   failure',
@@ -77,19 +76,6 @@ myGroupBy l = let
   l2 = myGroupBy' fst l in
   M.map (snd <$>) $ M.fromList l2
 
--- | The class of types that can be renamed.
--- It is made generic because it covers 2 notions:
---   - the name of a compute node that will eventually determine its compute path
---   - the name of field (which may become an object path)
--- This syntax tries to be convenient and will fail immediately
--- for basic errors such as illegal characters.
---
--- This could be revisited in the future, but it is a compromise
--- on readability.
-class CanRename a txt where
-  (@@) :: a -> txt -> a
-
-infixl 1 @@
 
 -- | Missing implementations in the code base.
 missing :: (LB.HasCallStack) => Text -> a

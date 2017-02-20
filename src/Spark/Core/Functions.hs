@@ -33,6 +33,7 @@ import Spark.Core.Internal.OpStructures
 import Spark.Core.Internal.AggregationFunctions
 import Spark.Core.Internal.TypesStructures(SQLType(..))
 import Spark.Core.Internal.Projections()
+import Spark.Core.Internal.CanRename
 
 dataset :: (ToSQL a, SQLTypeable a, HasCallStack) => [a] -> Dataset a
 dataset l = emptyDataset op tp where

@@ -23,6 +23,7 @@ module Spark.Core.Column(
   castCol',
   colRef,
   (//),
+  (/-),
   -- ToStaticProjectable,
   StaticColProjection,
   DynamicColProjection,
@@ -38,6 +39,5 @@ module Spark.Core.Column(
 
 import Spark.Core.Internal.ColumnStructures
 import Spark.Core.Internal.ColumnFunctions
-import Spark.Core.Internal.AlgebraStructures
 import Spark.Core.Internal.FunctionsInternals
 import Spark.Core.Internal.Projections
