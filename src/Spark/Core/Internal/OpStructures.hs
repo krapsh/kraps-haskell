@@ -119,6 +119,9 @@ data ColOp =
   | ColLit !DataType !Value
     -- | A structure.
   | ColStruct !(Vector TransformField)
+    -- | A broadcasting operation. The exact value being broadcast will depend
+    -- on the additional value stored in the column object.
+  | BroadcastColFunction
   deriving (Eq, Show)
 
 -- | A field in a structure.

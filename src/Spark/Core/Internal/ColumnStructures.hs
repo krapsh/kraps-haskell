@@ -24,12 +24,18 @@ A column of data from a dataset
 The ref is a reference potentially to the originating
 dataset, but it may be more general than that to perform
 type-safe tricks.
+
+Unlike Spark, columns are always attached to a reference dataset or dataframe.
+One cannot materialize a column out of thin air. In order to broadcast a value
+along a given column, the `broadcast` function is provided.
+
 TODO: try something like this https://www.vidarholen.net/contents/junk/catbag.html
 -}
 data ColumnData ref a = ColumnData {
-  -- TODO replace by a maybe to have an easier way to deal with constant
-  -- columns.
   _cOrigin :: !UntypedDataset,
+  -- A potential value that is being joined against the given dataset.
+  -- In this case, the column operation is fixed.
+  _cObsJoin :: !(Maybe UntypedLocalData),
   _cType :: !DataType,
   _cOp :: !ColOp,
   -- The name in the dataset.

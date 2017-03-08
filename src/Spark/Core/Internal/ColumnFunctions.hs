@@ -15,6 +15,9 @@ module Spark.Core.Internal.ColumnFunctions(
   colOrigin,
   colOp,
   colFieldName,
+  -- Standard functions
+  broadcast,
+  broadcast',
   -- Internal API
   iUntypedColData,
   iEmptyCol,
@@ -113,7 +116,23 @@ castTypeCol sqlt cd =
     then pure (_unsafeCastColData cd)
     else tryError $ sformat ("Cannot cast column "%sh%" to type "%sh) cd sqlt
 
+{-| Takes some local data (contained in an observable) and broadacasts it along
+a reference column.
+-}
+broadcast :: LocalData a -> Column ref b -> Column ref a
+broadcast ld c = ColumnData {
+    _cOrigin = colOrigin c,
+    _cType = unSQLType (nodeType ld),
+    _cObsJoin = Just (untypedLocalData ld),
+    _cOp = BroadcastColFunction,
+    _cReferingPath = Nothing
+  }
 
+broadcast' :: LocalFrame -> DynColumn -> DynColumn
+broadcast' lf dc = do
+  ld <- lf
+  c <- dc
+  return $ broadcast ld c
 
 -- (internal)
 colOrigin :: Column ref a -> UntypedDataset
@@ -222,6 +241,7 @@ _emptyColData :: Dataset a -> SQLType b -> FieldPath -> ColumnData a b
 _emptyColData ds sqlt path = ColumnData {
   _cOrigin = untypedDataset ds,
   _cType = unSQLType sqlt,
+  _cObsJoin = Nothing,
   _cOp = ColExtraction path,
   _cReferingPath = Nothing
 }
@@ -233,6 +253,7 @@ _homoColOp2 opName c1 c2 =
   in ColumnData {
       _cOrigin = _cOrigin c1,
       _cType = _cType c1,
+      _cObsJoin = Nothing,
       _cOp = co,
       _cReferingPath = Nothing }
 

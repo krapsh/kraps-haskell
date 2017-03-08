@@ -49,6 +49,7 @@ simpleShowOp (NodePointer _) = "org.spark.PlaceholderCache"
 
 -- A human-readable string that represents column operations.
 prettyShowColOp :: ColOp -> T.Text
+prettyShowColOp BroadcastColFunction = "broadcast()"
 prettyShowColOp (ColExtraction fpath) = T.pack (show fpath)
 prettyShowColOp (ColFunction txt cols) =
   _prettyShowColFun txt (V.toList (prettyShowColOp <$> cols))
@@ -168,6 +169,9 @@ _isSym txt = all isSymbol (T.unpack txt)
 -- Someone could craft a JSON that would confuse the object detection.
 -- Not sure if this is much of a security risk anyway.
 instance A.ToJSON ColOp where
+  -- The broadcast operator should have been replaced at this point by
+  -- some dataframe operations.
+  toJSON BroadcastColFunction = failure "BroadcastColFunction should not be serialized"
   toJSON (ColExtraction fp) = A.object [
     "colOp" .= T.pack "extraction",
     "field" .= toJSON fp]

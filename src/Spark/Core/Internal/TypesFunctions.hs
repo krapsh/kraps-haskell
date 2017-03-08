@@ -59,7 +59,6 @@ isNullable :: DataType -> Bool
 isNullable (StrictType _) = False
 isNullable (NullableType _) = True
 
-
 -- *** Creation of data types ***
 
 
