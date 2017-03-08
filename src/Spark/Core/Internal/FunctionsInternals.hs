@@ -232,6 +232,7 @@ _buildStruct cols = do
                   _cOrigin = ds,
                   _cType = StrictType (Struct st),
                   _cOp = fields,
+                  _cObsJoin = Nothing,
                   _cReferingPath = Just $ unsafeFieldName name
                 }
     l -> tryError $ sformat ("Too many distinct origins: "%sh) l

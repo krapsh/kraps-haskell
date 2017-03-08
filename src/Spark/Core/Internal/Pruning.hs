@@ -9,7 +9,8 @@ module Spark.Core.Internal.Pruning(
   NodeCacheInfo(..),
   NodeCache,
   pruneGraph,
-  pruneGraphDefault
+  pruneGraphDefault,
+  emptyNodeCache
 ) where
 
 import Data.HashMap.Strict as HM
@@ -48,6 +49,9 @@ data NodeCacheInfo = NodeCacheInfo {
 } deriving (Eq, Show)
 
 type NodeCache = HM.HashMap NodeId NodeCacheInfo
+
+emptyNodeCache :: NodeCache
+emptyNodeCache = HM.empty
 
 {-| It assumes a compute graph, NOT a dependency dag.
 -}

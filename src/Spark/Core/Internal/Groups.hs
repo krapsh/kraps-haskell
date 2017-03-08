@@ -235,6 +235,8 @@ _transformCol co ucd = ucd { _cOp = co }
 -- Takes a column operation and chain it with another column operation.
 _combineColOp :: ColOp -> ColOp -> Try ColOp
 _combineColOp _ (x @ (ColLit _ _)) = pure x
+_combineColOp x BroadcastColFunction =
+  tryError $ sformat ("_combineColOp: cannot combine "%sh%" with BroadcastColFunction") x
 _combineColOp x (ColFunction fn v) =
   ColFunction fn <$> sequence (_combineColOp x <$> v)
 _combineColOp x (ColExtraction fp) = _extractColOp x (V.toList (unFieldPath fp))
