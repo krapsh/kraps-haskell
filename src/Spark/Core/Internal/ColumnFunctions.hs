@@ -28,6 +28,7 @@ module Spark.Core.Internal.ColumnFunctions(
   extractPathUnsafe,
   colExtraction,
   unsafeProjectCol,
+  genColOp,
   -- -- Developer API (projection builders)
   -- dynamicProjection,
   -- stringToDynColProj,
@@ -67,7 +68,7 @@ import Spark.Core.Try
 import Spark.Core.StructuresInternal
 import Spark.Core.Internal.TypesFunctions
 import Spark.Core.Internal.OpStructures
-import Spark.Core.Internal.OpFunctions(prettyShowColOp)
+import Spark.Core.Internal.OpFunctions(prettyShowColOp, prettyShowColFun)
 import Spark.Core.Internal.AlgebraStructures
 import Spark.Core.Internal.Utilities
 
@@ -123,8 +124,7 @@ broadcast :: LocalData a -> Column ref b -> Column ref a
 broadcast ld c = ColumnData {
     _cOrigin = colOrigin c,
     _cType = unSQLType (nodeType ld),
-    _cObsJoin = Just (untypedLocalData ld),
-    _cOp = BroadcastColFunction,
+    _cOp = BroadcastColOp (untypedLocalData ld),
     _cReferingPath = Nothing
   }
 
@@ -139,7 +139,7 @@ colOrigin :: Column ref a -> UntypedDataset
 colOrigin = _cOrigin
 
 -- (internal)
-colOp :: Column ref a -> ColOp
+colOp :: Column ref a -> GeneralizedColOp
 colOp = _cOp
 
 {-| A tag with the reference of a column.
@@ -160,8 +160,19 @@ colFromObs' = missing "colFromObs'"
 -- | (internal)
 colFieldName :: ColumnData ref a -> FieldName
 colFieldName c =
-  fromMaybe (unsafeFieldName . prettyShowColOp . _cOp $ c)
+  fromMaybe (unsafeFieldName . _prettyShowColOp . _cOp $ c)
     (_cReferingPath c)
+
+-- ******** Operations on column operations ********
+
+genColOp :: ColOp -> GeneralizedColOp
+genColOp (ColExtraction fp) = GenColExtraction fp
+genColOp (ColFunction n v) = GenColFunction n (genColOp <$> v)
+-- TODO: replace in the ColOp by Cell instead of JSON.
+genColOp (ColLit dt _) = GenColLit dt (missing "genColOp (ColLit dt c)")
+genColOp (ColStruct v) = GenColStruct (f <$> v) where
+  f (TransformField n v') = GeneralizedTransField n (genColOp v')
+
 
 -- ********* Projection operations ***********
 
@@ -196,12 +207,12 @@ unsafeProjectCol cd (FieldPath p) dtTo =
   -- If the column is already a projection, flatten it.
   case colOp cd of
     -- No previous parent on an extraction -> we can safely append to that one.
-    ColExtraction (FieldPath p') ->
-      cd { _cOp = ColExtraction (FieldPath (p V.++ p')),
+    GenColExtraction (FieldPath p') ->
+      cd { _cOp = GenColExtraction . FieldPath $ (p V.++ p'),
            _cType = dtTo}
     _ ->
       -- Extract from the previous column.
-      cd { _cOp = ColExtraction (FieldPath p),
+      cd { _cOp = GenColExtraction . FieldPath $ p,
           _cType = dtTo}
 
 
@@ -234,26 +245,33 @@ iEmptyCol = _emptyColData
 
 -- | (internal) Creates a new column with a dynamic type.
 colExtraction :: Dataset a -> DataType -> FieldPath -> DynColumn
-colExtraction ds dt fp = Right $ dropColReference $ _emptyColData ds (SQLType dt) fp
+colExtraction ds dt fp = pure $ dropColReference $ _emptyColData ds (SQLType dt) fp
+
+_prettyShowColOp :: GeneralizedColOp -> T.Text
+_prettyShowColOp (GenColExtraction fp) = prettyShowColOp (ColExtraction fp)
+_prettyShowColOp (GenColFunction n v) =
+  prettyShowColFun n (V.toList (_prettyShowColOp <$> v))
+_prettyShowColOp (GenColLit _ c) = show' c
+_prettyShowColOp (BroadcastColOp uld) = "BROADCAST(" <> show' uld <> ")"
+_prettyShowColOp (GenColStruct v) =
+  "struct(" <> T.intercalate "," (_prettyShowColOp . gtfValue <$> V.toList v) <> ")"
 
 -- A new column data structure.
 _emptyColData :: Dataset a -> SQLType b -> FieldPath -> ColumnData a b
 _emptyColData ds sqlt path = ColumnData {
   _cOrigin = untypedDataset ds,
   _cType = unSQLType sqlt,
-  _cObsJoin = Nothing,
-  _cOp = ColExtraction path,
+  _cOp = GenColExtraction path,
   _cReferingPath = Nothing
 }
 
 -- Homogeneous operation betweet 2 columns.
 _homoColOp2 :: T.Text -> Column ref x -> Column ref x -> Column ref x
 _homoColOp2 opName c1 c2 =
-  let co = ColFunction opName (V.fromList (colOp <$> [c1, c2]))
+  let co = GenColFunction opName (V.fromList (colOp <$> [c1, c2]))
   in ColumnData {
       _cOrigin = _cOrigin c1,
       _cType = _cType c1,
-      _cObsJoin = Nothing,
       _cOp = co,
       _cReferingPath = Nothing }
 
@@ -271,7 +289,7 @@ instance forall ref a. Show (Column ref a) where
     let
       name = case _cReferingPath c of
         Just fn -> show' fn
-        Nothing -> prettyShowColOp . colOp $ c
+        Nothing -> _prettyShowColOp . colOp $ c
       txt = fromString "{}{{}}->{}" :: TF.Format
       -- path = T.pack . show . _cReferingPath $ c
       -- no = prettyShowColOp . colOp $ c

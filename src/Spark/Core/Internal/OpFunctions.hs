@@ -9,7 +9,8 @@ module Spark.Core.Internal.OpFunctions(
   hashUpdateNodeOp,
   prettyShowColOp,
   hdfsPath,
-  updateSourceStamp
+  updateSourceStamp,
+  prettyShowColFun
 ) where
 
 import qualified Data.Text as T
@@ -49,11 +50,10 @@ simpleShowOp (NodePointer _) = "org.spark.PlaceholderCache"
 
 -- A human-readable string that represents column operations.
 prettyShowColOp :: ColOp -> T.Text
-prettyShowColOp BroadcastColFunction = "broadcast()"
 prettyShowColOp (ColExtraction fpath) = T.pack (show fpath)
 prettyShowColOp (ColFunction txt cols) =
-  _prettyShowColFun txt (V.toList (prettyShowColOp <$> cols))
-prettyShowColOp (ColLit _ cell) = T.pack (show cell)
+  prettyShowColFun txt (V.toList (prettyShowColOp <$> cols))
+prettyShowColOp (ColLit _ cell) = show' cell
 prettyShowColOp (ColStruct s) =
   "struct(" <> T.intercalate "," (prettyShowColOp . tfValue <$> V.toList s) <> ")"
 
@@ -90,7 +90,7 @@ updateSourceStamp x _ =
 
 _prettyShowAggOp :: AggOp -> T.Text
 _prettyShowAggOp (AggUdaf _ ucn fp) = ucn <> "(" <> show' fp <> ")"
-_prettyShowAggOp (AggFunction sfn v) = _prettyShowColFun sfn r where
+_prettyShowAggOp (AggFunction sfn v) = prettyShowColFun sfn r where
   r = V.toList (show' <$> v)
 _prettyShowAggOp (AggStruct v) =
   "struct(" <> T.intercalate "," (_prettyShowAggOp . afValue <$> V.toList v) <> ")"
@@ -149,15 +149,15 @@ hashUpdateNodeOp ctx op = _hashUpdateJson ctx $ A.object [
   "extra" .= extraNodeOpData op]
 
 
-_prettyShowColFun :: T.Text -> [Text] -> T.Text
-_prettyShowColFun txt [col] | _isSym txt =
+prettyShowColFun :: T.Text -> [Text] -> T.Text
+prettyShowColFun txt [col] | _isSym txt =
   T.concat [txt, col]
-_prettyShowColFun txt [col1, col2] | _isSym txt =
+prettyShowColFun txt [col1, col2] | _isSym txt =
   -- This is not perfect for complex operations, but it should get the job done
   -- for now.
   -- TODO eventually use operator priority here
   T.concat [col1, txt, col2]
-_prettyShowColFun txt cols =
+prettyShowColFun txt cols =
   let vals = T.intercalate ", " cols in
   T.concat [txt, "(", vals, ")"]
 
@@ -169,9 +169,6 @@ _isSym txt = all isSymbol (T.unpack txt)
 -- Someone could craft a JSON that would confuse the object detection.
 -- Not sure if this is much of a security risk anyway.
 instance A.ToJSON ColOp where
-  -- The broadcast operator should have been replaced at this point by
-  -- some dataframe operations.
-  toJSON BroadcastColFunction = failure "BroadcastColFunction should not be serialized"
   toJSON (ColExtraction fp) = A.object [
     "colOp" .= T.pack "extraction",
     "field" .= toJSON fp]

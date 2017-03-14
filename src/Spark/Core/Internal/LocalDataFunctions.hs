@@ -7,20 +7,22 @@
 -- A number of functions related to local data.
 
 module Spark.Core.Internal.LocalDataFunctions(
-  constant
+  constant,
+  iPackTupleObs
 ) where
 
 import Data.Aeson(toJSON, Value(Null))
 import qualified Data.Text as T
+import qualified Data.List.NonEmpty as N
 import Control.Exception.Base(assert)
 
 import Spark.Core.Internal.DatasetFunctions
 import Spark.Core.Internal.DatasetStructures
-import Spark.Core.Internal.TypesStructures(unSQLType)
-import Spark.Core.Internal.TypesFunctions(intType)
+import Spark.Core.Internal.TypesFunctions
+import Spark.Core.Internal.TypesStructures
 import Spark.Core.Internal.OpStructures
 import Spark.Core.Internal.Utilities
-import Spark.Core.Types
+import Spark.Core.Internal.TypesGenerics(SQLTypeable, buildType)
 import Spark.Core.Row
 
 constant :: (ToSQL a, SQLTypeable a) => a -> LocalData a
@@ -29,6 +31,22 @@ constant cst =
     sqlt = buildType
     dt = unSQLType sqlt
   in emptyLocalData (NodeLocalLit dt (toJSON (valueToCell cst))) sqlt
+
+{-| (developer API)
+
+This function takes a non-empty list of observables and puts them
+into a structure. The names of each element is _0 ... _(n-1)
+-}
+iPackTupleObs :: N.NonEmpty UntypedLocalData -> UntypedLocalData
+iPackTupleObs ulds =
+  let dt = structTypeTuple' (unSQLType . nodeType <$> ulds)
+      so = StandardOperator {
+                soName = "org.spark.LocalPack",
+                soOutputType = dt,
+                soExtra = Null }
+      op = NodeLocalOp so
+  in emptyLocalData op (SQLType dt)
+        `parents` (untyped <$> (N.toList ulds))
 
 instance (Num a, ToSQL a, SQLTypeable a) => Num (LocalData a) where
   (+) = _binOp "org.spark.LocalPlus"

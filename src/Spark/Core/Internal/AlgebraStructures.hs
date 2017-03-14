@@ -1,6 +1,13 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FunctionalDependencies #-}
-
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Spark.Core.Internal.AlgebraStructures where
 
@@ -12,6 +19,7 @@ data BinaryOpFun in1 in2 to = BinaryOpFun {
   bodLift2 :: in2 -> to,
   bodOp :: to -> to -> to
 }
+
 
 class HomoBinaryOp2 in1 in2 to | in1 in2 -> to where
   _liftFun :: (to -> to -> to) -> BinaryOpFun in1 in2 to

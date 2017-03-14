@@ -19,6 +19,7 @@ data.
 module Spark.Core.Internal.Projections where
 
 import qualified Data.Text as T
+import qualified Data.Vector as V
 import Data.Maybe(fromMaybe)
 import Formatting
 import Data.Text(Text)
@@ -40,7 +41,7 @@ from is the type of the dataset (which is also a typed dataset)
 to is the type of the final column.
 -}
 data StaticColProjection from to = StaticColProjection {
-  _staticProj :: (SQLType from, FieldPath, SQLType to)
+  _staticProj :: SQLType from -> Try (FieldPath, SQLType to)
 }
 
 {-| The class of projections that require some runtime introspection
@@ -50,6 +51,11 @@ data DynamicColProjection = DynamicColProjection {
   -- The start type is irrelevant.
   _dynProjTry :: DataType -> Try (FieldPath, DataType)
 }
+
+-- TODO: use type literal
+data FixedProjection1 = FixedProjection1
+data FixedProjection2 = FixedProjection2
+data FixedProjection3 = FixedProjection3
 
 {-| The operation of extraction from a Spark object to another
 object.
@@ -88,7 +94,10 @@ type family ProjectReturn from proj where
   ProjectReturn DataFrame Text = DynColumn
   ProjectReturn DynColumn DynamicColProjection = DynColumn
   ProjectReturn DynColumn Text = DynColumn
+  ProjectReturn (Dataset (x1, x2)) FixedProjection1 = Column (x1, x2) x1
+  ProjectReturn (Dataset (x1, x2)) FixedProjection2 = Column (x1, x2) x2
   ProjectReturn (Dataset x) DynamicColProjection = DynColumn
+  -- TODO: not sure how to force x ~ x'
   ProjectReturn (Dataset x) (StaticColProjection x y) = Column x y
   ProjectReturn (Dataset x) Text = DynColumn
 
@@ -131,6 +140,12 @@ instance Project (Dataset a) Text where
   _performProject ds s =
     let s' = T.unpack $ convertToText s
     in projectDSDyn ds (stringToDynColProj s')
+
+instance forall x1 x2. Project (Dataset (x1, x2)) FixedProjection1 where
+  _performProject ds _ = projectDsCol ds (StaticColProjection (_projectNthField 1))
+
+instance forall x1 x2. Project (Dataset (x1, x2)) FixedProjection2 where
+  _performProject ds _ = projectDsCol ds (StaticColProjection (_projectNthField 2))
 
 -- data Foo
 -- data Bar
@@ -195,7 +210,13 @@ instance Projection DynColumn String DynColumn where
   _performProjection dc s = _performProjection dc (stringToDynColProj s)
 
 
+-- Tuples
 
+_2 :: FixedProjection2
+_2 = FixedProjection2
+
+_1 :: FixedProjection1
+_1 = FixedProjection1
 
 
 {-| Lets the users define their own static projections.
@@ -216,7 +237,10 @@ unsafeStaticProjection sqlt field =
     sqlt' = fromMaybe
       (failure $ sformat ("unsafeStaticProjection: Cannot find the field "%sh%" in type "%sh) field sqlt)
       (extractPathUnsafe sqlt f)
-  in StaticColProjection (sqlt, f, sqlt')
+    f2 inSqlt = if inSqlt == sqlt
+                then pure (f, sqlt')
+                else tryError $ "Expected type " <> show' sqlt <> " but received type " <> show' inSqlt
+  in StaticColProjection f2
 
 
 -- Returns a projection from a path (even if invalid data)
@@ -251,12 +275,11 @@ pathToDynColProj fpath =
 
 -- | Converts a static project to a dynamic projector.
 colStaticProjToDynProj :: forall from to. StaticColProjection from to -> DynamicColProjection
-colStaticProjToDynProj (StaticColProjection (SQLType dtFrom, fp, SQLType dtTo)) =
-  DynamicColProjection $ \dt ->
-    -- TODO factorize this as a projection on types.
-    if dt /= dtFrom then
-      tryError $ sformat ("Cannot convert type "%shown%" into type "%shown) dt dtFrom
-    else pure (fp, dtTo)
+colStaticProjToDynProj (StaticColProjection fProj) =
+  DynamicColProjection $ \dt -> do
+    (fp, sqlt) <- fProj (SQLType dt)
+    let dt' = unSQLType sqlt
+    return (fp, dt')
 
 -- ****** Functions that perform projections *******
 
@@ -271,13 +294,14 @@ projectDFDyn df proj = do
  node <- df
  projectDSDyn node proj
 
-projectDsCol :: Dataset from -> StaticColProjection from to -> Column from to
-projectDsCol ds proj = let (_, p, sqlt) = _staticProj proj in
+projectDsCol :: (HasCallStack) => Dataset from -> StaticColProjection from to -> Column from to
+projectDsCol ds proj = let (p, sqlt) = forceRight $ _staticProj proj (nodeType ds) in
  iEmptyCol ds sqlt p
 
 projectColCol :: Column ref from -> StaticColProjection from to -> Column ref to
-projectColCol c (StaticColProjection (_, fp, SQLType dt)) =
- unsafeProjectCol c fp dt
+projectColCol c (StaticColProjection fProj) =
+  let (fp, SQLType dt) = forceRight $ fProj (colType c)
+  in unsafeProjectCol c fp dt
 
 
 projectColDynCol :: ColumnData ref a -> DynamicColProjection -> DynColumn
@@ -288,3 +312,13 @@ projectDColDCol :: DynColumn -> DynamicColProjection -> DynColumn
 projectDColDCol c proj = do
  cd <- c
  projectColDynCol cd proj
+
+_projectNthField :: Int -> SQLType a -> Try (FieldPath, SQLType b)
+_projectNthField n (SQLType (StrictType (Struct (StructType v)))) =
+  let extractNth :: Int -> [StructField] -> Try (FieldPath, SQLType b)
+      extractNth 1 (f1 : _) =
+        pure (FieldPath . V.singleton . structFieldName $ f1, SQLType . structFieldType $ f1)
+      extractNth n' (_ : t) | n > 1 = extractNth (n'-1) t
+      extractNth n' l = tryError $ "_projectNthField: n = "<>show' n'<>" l="<>show' l
+  in extractNth n (V.toList v)
+_projectNthField _ sqlt = tryError $ "_1: Expected a struct, got " <> show' sqlt

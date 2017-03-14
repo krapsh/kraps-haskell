@@ -8,6 +8,7 @@ module Spark.Core.Internal.ColumnStructures where
 
 import Control.Arrow ((&&&))
 import Data.Function(on)
+import Data.Vector(Vector)
 
 import Spark.Core.Internal.DatasetStructures
 import Spark.Core.Internal.RowStructures
@@ -33,15 +34,33 @@ TODO: try something like this https://www.vidarholen.net/contents/junk/catbag.ht
 -}
 data ColumnData ref a = ColumnData {
   _cOrigin :: !UntypedDataset,
-  -- A potential value that is being joined against the given dataset.
-  -- In this case, the column operation is fixed.
-  _cObsJoin :: !(Maybe UntypedLocalData),
   _cType :: !DataType,
-  _cOp :: !ColOp,
+  _cOp :: !GeneralizedColOp,
   -- The name in the dataset.
   -- If not set, it will be deduced from the operation.
   _cReferingPath :: !(Maybe FieldName)
 }
+
+{-| A generalization of the column operation.
+
+This structure is useful to performn some extra operations not supported by
+the Spark engine:
+ - express joins with an observable
+ - keep track of DAGs of column operations (not implemented yet)
+-}
+data GeneralizedColOp =
+    GenColExtraction !FieldPath
+  | GenColFunction !SqlFunctionName !(Vector GeneralizedColOp)
+  | GenColLit !DataType !Cell
+    -- This is the extra operation that needs to be flattened with a broadcast.
+  | BroadcastColOp !UntypedLocalData
+  | GenColStruct !(Vector GeneralizedTransField)
+  deriving (Eq)
+
+data GeneralizedTransField = GeneralizedTransField {
+  gtfName :: !FieldName,
+  gtfValue :: !GeneralizedColOp
+} deriving (Eq)
 
 {-| A column of data from a dataset or a dataframe.
 

@@ -75,6 +75,7 @@ The resulting dataframe has 2 columns:
 
  Note: this is a low-level operation. Users may want to use broadcastObs instead.
 -}
+-- TODO: what is the difference with broadcastPair???
 joinObs' :: DynColumn -> LocalFrame -> DataFrame
 joinObs' dc lf = do
   let df = pack' dc

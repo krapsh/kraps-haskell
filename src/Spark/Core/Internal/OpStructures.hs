@@ -100,7 +100,9 @@ data ScalaStaticFunctionApplication = ScalaStaticFunctionApplication {
 }
 
 
--- | The different kinds of column operations.
+-- | The different kinds of column operations that are understood by the
+-- backend.
+--
 -- These operations describe the physical operations on columns as supported
 -- by Spark SQL. They can operate on column -> column, column -> row, row->row.
 -- Of course, not all operators are valid for each configuration.
@@ -119,9 +121,6 @@ data ColOp =
   | ColLit !DataType !Value
     -- | A structure.
   | ColStruct !(Vector TransformField)
-    -- | A broadcasting operation. The exact value being broadcast will depend
-    -- on the additional value stored in the column object.
-  | BroadcastColFunction
   deriving (Eq, Show)
 
 -- | A field in a structure.
