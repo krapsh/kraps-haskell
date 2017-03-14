@@ -1,15 +1,19 @@
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Spark.Core.Internal.Arithmetics where
+module Spark.Core.Internal.Arithmetics(
+  GeneralizedHomoReturn,
+  GeneralizedHomo2,
+  HomoColOp2,
+  -- | Developer API
+  performOp
+  ) where
 
 import qualified Data.Text as T
 import qualified Data.Vector as V
@@ -43,7 +47,10 @@ type family GeneralizedHomoReturn x1 x2 where
   GeneralizedHomoReturn (LocalData x1) (LocalData x1) = LocalData x1
   GeneralizedHomoReturn (LocalData x1) LocalFrame = LocalFrame
 
-type HomoColOp2 x = (forall ref. Column ref x -> Column ref x -> Column ref x)
+-- The type of an homogeneous operation.
+-- TODO it would be nice to enforce this contstraint at the type level,
+-- but it is a bit more complex to do.
+type HomoColOp2 = UntypedColumnData -> UntypedColumnData -> UntypedColumnData
 
 {-| The class of types that can be lifted to operations onto Kraps types.
 
@@ -53,13 +60,13 @@ output have the same underlying type).
 At its core, it takes a broadcasted operation that works on columns, and
 makes that operation available on other shapes.
 -}
-class GeneralizedHomo2 x1 x2 x where
-  _projectHomo :: x1 -> x2 -> HomoColOp2 x -> GeneralizedHomoReturn x1 x2
+class GeneralizedHomo2 x1 x2 where
+  _projectHomo :: x1 -> x2 -> HomoColOp2 -> GeneralizedHomoReturn x1 x2
 
 {-| Performs an operation, using a reference operation defined on columns.
 -}
-performOp :: (GeneralizedHomo2 x1 x2 x) =>
-  (forall ref. Column ref x -> Column ref x -> Column ref x) ->
+performOp :: (GeneralizedHomo2 x1 x2) =>
+  HomoColOp2 ->
   x1 ->
   x2 ->
   GeneralizedHomoReturn x1 x2
@@ -67,21 +74,25 @@ performOp f x1 x2 = _projectHomo x1 x2 f
 
 -- ******* INSTANCES *********
 
-instance (SQLTypeable x) => GeneralizedHomo2 DynColumn DynColumn x where
+instance GeneralizedHomo2 DynColumn DynColumn where
   _projectHomo = _performDynDynTp
 
-_performDynDynTp :: forall x. (SQLTypeable x) =>
-  DynColumn -> DynColumn -> HomoColOp2 x -> DynColumn
+_performDynDynTp ::
+  DynColumn -> DynColumn -> HomoColOp2 -> DynColumn
 _performDynDynTp dc1 dc2 f = do
   c1 <- dc1
   c2 <- dc2
-  let sqlt = buildType :: SQLType x
-  let dt = unSQLType sqlt
-  guard (unSQLType (colType c1) /= dt) $
-    tryError $ "_performDynDynTp c1" -- TODO
-  guard (unSQLType (colType c2) /= dt) $
-    tryError $ "_performDynDynTp c2" -- TODO
-  c1' <- castTypeCol sqlt c1
-  c2' <- castTypeCol sqlt c2
-  let c = f c1' c2'
-  return c
+  -- TODO: add type guard
+  let c = f c1 c2
+  -- TODO: add dynamic check on the type of the return
+  return (dropColType c)
+
+
+-- TODO: move this to a separate file
+-- ******** IMPLEMENTATION CODE TO MOVE ********
+
+{-| A generalization of the addition for the Kraps types.
+-}
+(.+) :: forall a1 a2. (Num a1, Num a2, GeneralizedHomo2 a1 a2) =>
+  a1 -> a2 -> GeneralizedHomoReturn a1 a2
+(.+) = performOp (homoColOp2 "sum")

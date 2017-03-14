@@ -29,6 +29,7 @@ module Spark.Core.Internal.ColumnFunctions(
   colExtraction,
   unsafeProjectCol,
   genColOp,
+  homoColOp2,
   -- -- Developer API (projection builders)
   -- dynamicProjection,
   -- stringToDynColProj,
@@ -265,9 +266,9 @@ _emptyColData ds sqlt path = ColumnData {
   _cReferingPath = Nothing
 }
 
--- Homogeneous operation betweet 2 columns.
-_homoColOp2 :: T.Text -> Column ref x -> Column ref x -> Column ref x
-_homoColOp2 opName c1 c2 =
+-- | Homogeneous operation betweet 2 columns.
+homoColOp2 :: T.Text -> Column ref x -> Column ref x -> Column ref x
+homoColOp2 opName c1 c2 =
   let co = GenColFunction opName (V.fromList (colOp <$> [c1, c2]))
   in ColumnData {
       _cOrigin = _cOrigin c1,
@@ -280,7 +281,7 @@ _homoColOp2' opName c1' c2' = do
   c1 <- c1'
   c2 <- c2'
   -- TODO check same origin
-  return $ _homoColOp2 opName c1 c2
+  return $ homoColOp2 opName c1 c2
 
 -- ******** Displaying and pretty printing ************
 
@@ -311,7 +312,7 @@ instance forall ref a. HomoBinaryOp2 DynColumn (Column ref a) DynColumn where
 
 
 instance (Num x) => Num (Column ref x) where
-  (+) = _homoColOp2 "sum"
+  (+) = homoColOp2 "sum"
   (*) _ _ = missing "Num (Column x): *"
   abs _ = missing "Num (Column x): abs"
   signum _ = missing "Num (Column x): signum"
