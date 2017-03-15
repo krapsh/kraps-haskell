@@ -9,6 +9,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE RankNTypes #-}
 
+-- TODO remove this file
 module Spark.Core.Internal.AlgebraStructures where
 
 -- | Algebraic structures that are common to columns and observables.

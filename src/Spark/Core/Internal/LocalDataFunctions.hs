@@ -49,6 +49,7 @@ iPackTupleObs ulds =
         `parents` (untyped <$> (N.toList ulds))
 
 instance (Num a, ToSQL a, SQLTypeable a) => Num (LocalData a) where
+  -- TODO: convert all that to use column operations
   (+) = _binOp "org.spark.LocalPlus"
   (-) = _binOp "org.spark.LocalMinus"
   (*) = _binOp "org.spark.LocalMult"

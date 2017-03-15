@@ -41,6 +41,7 @@ module Spark.Core.Internal.DatasetFunctions(
   updateNodeOp,
   broadcastPair,
   -- Developer conversions
+  -- TODO: remove all that
   fun1ToOpTyped,
   fun2ToOpTyped,
   nodeOpToFun1,
