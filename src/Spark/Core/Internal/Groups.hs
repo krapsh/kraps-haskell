@@ -67,7 +67,7 @@ A group data type with no typing information.
 -}
 type UntypedGroupData = GroupData Cell Cell
 
-type GroupTry a = Either T.Text a
+-- type GroupTry a = Either T.Text a
 
 -- A useful type when chaining operations withing groups.
 data PipedTrans =
@@ -86,10 +86,13 @@ groupByKey keys vals = forceRight $ _castGroup (colType keys) (colType vals) =<<
 -}
 -- This only allows direct transforms, so it is probably valid in all cases.
 mapGroup :: GroupData key val -> (forall ref. Column ref val -> Column ref val') -> GroupData key val'
-mapGroup g f = undefined
-  -- let c = _unsafeCastColData (_valueCol g)
-  -- -- TODO: this is wrong, an aggregation may have been forced in between.
-  -- in g { _gdValue = iUntypedColData (f c) }
+mapGroup g f =
+  let c = _valueCol g
+      c' = f (_unsafeCastColData c)
+      -- Assume for now that there is no broadcast.
+      -- TODO: deal with broadcast eventually
+      gVals = forceRight $ _groupCol c'
+  in g {  _gdValue = gVals }
 
 {-| The generalized value transform.
 
@@ -190,13 +193,6 @@ _valueCol gd = ColumnData {
   }
 
 
-
-_mapStructuredTransform :: ColOp -> LogicalGroupData -> GroupTry LogicalGroupData
-_mapStructuredTransform = undefined
-
-_mapAggTransform :: AggTransform -> LogicalGroupData -> GroupTry LogicalGroupData
-_mapAggTransform = undefined
-
 _pError :: T.Text -> PipedTrans
 _pError = PipedError
 
@@ -249,18 +245,21 @@ _applyAggOp dt ao ugd = traceHint ("_applyAggOp dt=" <> show' dt <> " ao=" <> sh
   in ds2
 
 _unrollGroupTrans :: UntypedGroupData -> ColOp -> PipedTrans
-_unrollGroupTrans ugd co = undefined
-  -- case _combineColOp (colOp (_valueCol ugd)) co of
-  --   -- TODO: this is ugly, we are loosing the error structure.
-  --   Left x -> _pError $ "_unrollGroupTrans: failure with " <> show' x
-  --   Right co' -> PipedGroup $ ugd { _gdValue = _transformCol co' (_valueCol ugd) }
-
+_unrollGroupTrans ugd co =
+  let gco = colOp (_valueCol ugd) in case colOpNoBroadcast gco of
+    Left x -> _pError $ "_unrollGroupTrans (1): using unimplemented feature:" <> show' x
+    Right co' -> case _combineColOp co' co of
+      -- TODO: this is ugly, we are loosing the error structure.
+      Left x -> _pError $ "_unrollGroupTrans (2): failure with " <> show' x
+      Right co'' -> case _groupCol $ _transformCol co'' (_valueCol ugd) of
+        Left x -> _pError $ "_unrollGroupTrans (3): failure with " <> show' x
+        Right g -> PipedGroup $ ugd { _gdValue = g }
 
 -- TODO: this should be moved to ColumnFunctions
 _transformCol :: ColOp -> UntypedColumnData -> UntypedColumnData
 -- TODO: at this point, it should be checked for correctness (the fields
 -- being extracted should exist)
-_transformCol co ucd = undefined -- ucd { _cOp = co }
+_transformCol co ucd = ucd { _cOp = genColOp co }
 
 -- Takes a column operation and chain it with another column operation.
 _combineColOp :: ColOp -> ColOp -> Try ColOp
@@ -318,32 +317,32 @@ _castGroup (SQLType keyType) (SQLType valType) ugd =
 _untypedGroup :: GroupData key val -> UntypedGroupData
 _untypedGroup gd = gd { _gdRef = _gdRef gd }
 
-_groupByKey :: (HasCallStack) => UntypedColumnData -> UntypedColumnData -> LogicalGroupData
+_groupByKey :: UntypedColumnData -> UntypedColumnData -> LogicalGroupData
 _groupByKey keys vals =
   if nodeId (colOrigin keys) == nodeId (colOrigin vals)
   then
     -- Get the latest data (packed)
-    -- TODO: but a scoping
+    -- TODO: put a scoping
     let s = struct (keys, vals) :: Column UnknownReference (Cell, Cell)
         ds = pack1 s
         keys' = ds // _1
         vals' = ds // _2
-        keysOp = forceRight $ colOpNoBroadcast (colOp keys')
-        valsOp = forceRight $ colOpNoBroadcast (colOp vals')
-        gKeys = GroupColumn {
-                  _gcType = unSQLType $ colType keys',
-                  _gcOp = keysOp,
-                  _gcRefName = Nothing
-                }
-        gVals = GroupColumn {
-                  _gcType = unSQLType $ colType vals',
-                  _gcOp = valsOp,
-                  _gcRefName = Nothing
-                }
-    in pure GroupData {
-              _gdRef = colOrigin keys',
-              _gdKey = gKeys,
-              _gdValue = gVals
-            }
+    in do
+      gKeys <- _groupCol keys'
+      gVals <- _groupCol vals'
+      return GroupData {
+                _gdRef = colOrigin keys',
+                _gdKey = gKeys,
+                _gdValue = gVals
+              }
   else
     tryError $ sformat ("The columns have different origin: "%sh%" and "%sh) keys vals
+
+_groupCol :: Column ref a -> Try GroupColumn
+_groupCol c = do
+  co <- colOpNoBroadcast (colOp c)
+  return GroupColumn {
+            _gcType = unSQLType $ colType c,
+            _gcOp = co,
+            _gcRefName = Nothing
+           }
