@@ -15,5 +15,7 @@ module Spark.Core.ColumnFunctions(
 ) where
 
 import Spark.Core.Internal.AlgebraStructures
+import Spark.Core.Internal.Arithmetics
+import Spark.Core.Internal.ArithmeticsImpl
 import Spark.Core.Internal.AggregationFunctions
 import Spark.Core.Internal.Projections()

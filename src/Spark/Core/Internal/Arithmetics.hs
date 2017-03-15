@@ -1,36 +1,21 @@
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RankNTypes #-}
 
 module Spark.Core.Internal.Arithmetics(
   GeneralizedHomoReturn,
   GeneralizedHomo2,
   HomoColOp2,
   -- | Developer API
-  performOp
+  performOp,
   ) where
 
-import qualified Data.Text as T
-import qualified Data.Vector as V
-import Data.Maybe(fromMaybe)
-import Formatting
-import Data.Text(Text)
-import Control.Monad(guard)
 
-import Spark.Core.Try
-import Spark.Core.StructuresInternal
-import Spark.Core.Internal.TypesStructures
 import Spark.Core.Internal.ColumnFunctions
 import Spark.Core.Internal.ColumnStructures
-import Spark.Core.Internal.DatasetFunctions
 import Spark.Core.Internal.DatasetStructures
+import Spark.Core.Internal.FunctionsInternals(projectColFunction2')
 import Spark.Core.Internal.Utilities
-import Spark.Core.Internal.TypesGenerics(SQLTypeable, buildType)
 
 {-| All the automatic conversions supported when lifting a -}
 type family GeneralizedHomoReturn x1 x2 where
@@ -46,6 +31,8 @@ type family GeneralizedHomoReturn x1 x2 where
   GeneralizedHomoReturn (LocalData x1) DynColumn = DynColumn
   GeneralizedHomoReturn (LocalData x1) (LocalData x1) = LocalData x1
   GeneralizedHomoReturn (LocalData x1) LocalFrame = LocalFrame
+  GeneralizedHomoReturn LocalFrame (Column ref x1) = DynColumn
+  GeneralizedHomoReturn LocalFrame LocalFrame = LocalFrame
 
 -- The type of an homogeneous operation.
 -- TODO it would be nice to enforce this contstraint at the type level,
@@ -75,11 +62,38 @@ performOp f x1 x2 = _projectHomo x1 x2 f
 -- ******* INSTANCES *********
 
 instance GeneralizedHomo2 DynColumn DynColumn where
-  _projectHomo = _performDynDynTp
+  _projectHomo = _performDynDyn
 
-_performDynDynTp ::
+instance GeneralizedHomo2 (Column ref x) (Column ref x) where
+  _projectHomo = _performCC
+
+instance GeneralizedHomo2 DynColumn (Column ref x) where
+  _projectHomo dc1 c2 = _performDynDyn dc1 (untypedCol c2)
+
+instance GeneralizedHomo2 (Column ref x) DynColumn where
+  _projectHomo c1 = _performDynDyn (untypedCol c1)
+
+instance GeneralizedHomo2 (Column ref x) (LocalData x) where
+  _projectHomo c1 o2 = _projectHomo c1 (broadcast o2 c1)
+
+instance GeneralizedHomo2 (LocalData x) (Column ref x) where
+  _projectHomo o1 c2 = _projectHomo (broadcast o1 c2) c2
+
+instance GeneralizedHomo2 (Column ref x) LocalFrame where
+  _projectHomo c1 o2' = _projectHomo c1 (broadcast' o2' (untypedCol c1))
+
+instance GeneralizedHomo2 LocalFrame (Column ref x) where
+  _projectHomo o1' c2 = _projectHomo (broadcast' o1' (untypedCol c2)) c2
+
+instance GeneralizedHomo2 LocalFrame LocalFrame where
+  _projectHomo o1' o2' f =
+    let f' x y = f <$> x <*> y
+    in projectColFunction2' f' o1' o2'
+
+
+_performDynDyn ::
   DynColumn -> DynColumn -> HomoColOp2 -> DynColumn
-_performDynDynTp dc1 dc2 f = do
+_performDynDyn dc1 dc2 f = do
   c1 <- dc1
   c2 <- dc2
   -- TODO: add type guard
@@ -87,12 +101,14 @@ _performDynDynTp dc1 dc2 f = do
   -- TODO: add dynamic check on the type of the return
   return (dropColType c)
 
+_performCC :: (HasCallStack) =>
+  Column ref x -> Column ref x -> HomoColOp2 -> Column ref x
+_performCC c1 c2 f =
+  let sqlt = colType c1
+      c = f (iUntypedColData c1) (iUntypedColData c2)
+      c' = forceRight $ castCol (colRef c1) sqlt (pure c)
+  in c'
 
--- TODO: move this to a separate file
--- ******** IMPLEMENTATION CODE TO MOVE ********
-
-{-| A generalization of the addition for the Kraps types.
--}
-(.+) :: forall a1 a2. (Num a1, Num a2, GeneralizedHomo2 a1 a2) =>
-  a1 -> a2 -> GeneralizedHomoReturn a1 a2
-(.+) = performOp (homoColOp2 "sum")
+_performCO :: (HasCallStack) =>
+  Column ref x -> LocalData x -> HomoColOp2 -> Column ref x
+_performCO c1 o2 = _performCC c1 (broadcast o2 c1)

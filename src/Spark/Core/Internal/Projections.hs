@@ -16,7 +16,19 @@ columns. This allows users for a fairly natural manipulation of
 data.
 
 -}
-module Spark.Core.Internal.Projections where
+module Spark.Core.Internal.Projections(
+  ProjectReturn,
+  Project,
+  (//),
+  (/-),
+  _1,
+  _2,
+  -- * Developer functions
+  StaticColProjection(..),
+  DynamicColProjection,
+  unsafeStaticProjection,
+  dynamicProjection,
+) where
 
 import qualified Data.Text as T
 import qualified Data.Vector as V
@@ -55,7 +67,6 @@ data DynamicColProjection = DynamicColProjection {
 -- TODO: use type literal
 data FixedProjection1 = FixedProjection1
 data FixedProjection2 = FixedProjection2
-data FixedProjection3 = FixedProjection3
 
 {-| The operation of extraction from a Spark object to another
 object.

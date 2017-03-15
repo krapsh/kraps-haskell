@@ -121,6 +121,7 @@ castTypeCol sqlt cd =
 {-| Takes some local data (contained in an observable) and broadacasts it along
 a reference column.
 -}
+-- TODO: it would be more logical to swap the inputs
 broadcast :: LocalData a -> Column ref b -> Column ref a
 broadcast ld c = ColumnData {
     _cOrigin = colOrigin c,

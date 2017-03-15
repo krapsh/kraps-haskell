@@ -23,6 +23,8 @@ module Spark.Core.Internal.FunctionsInternals(
   -- Developer tools
   checkOrigin,
   projectColFunction,
+  projectColFunction',
+  projectColFunction2',
   colOpNoBroadcast
 ) where
 
@@ -42,7 +44,9 @@ import Spark.Core.Internal.Utilities
 import Spark.Core.Internal.TypesFunctions
 import Spark.Core.Internal.LocalDataFunctions
 import Spark.Core.Internal.TypesStructures
+import Spark.Core.Internal.Projections
 import Spark.Core.Internal.OpStructures
+import Spark.Core.Internal.TypesGenerics(SQLTypeable, buildType)
 import Spark.Core.StructuresInternal
 import Spark.Core.Try
 
@@ -158,6 +162,44 @@ struct = _staticPackAsColumn2
 checkOrigin :: [DynColumn] -> Try [UntypedColumnData]
 checkOrigin x = _checkOrigin =<< sequence x
 
+{-| Takes a typed function that operates on columns and projects this function
+onto a similar operation for type observables.
+
+This function is not very smart and may throw an error for complex cases such
+as broadcasting, joins, etc.
+-}
+-- TODO: we do not need technically the typeable constraint.
+-- It is an additional check.
+projectColFunction :: forall x y.
+  (HasCallStack, SQLTypeable y, SQLTypeable x) =>
+  (forall ref. Column ref x -> Column ref y) -> LocalData x -> LocalData y
+projectColFunction f o =
+  let o' = untypedLocalData o
+      sqltx = buildType :: SQLType x
+      sqlty = buildType :: SQLType y
+      f' :: UntypedColumnData -> Try UntypedColumnData
+      f' x = dropColType . f <$> castTypeCol sqltx x
+      o2 = projectColFunctionUntyped (f' =<<) o'
+      o3 = castType sqlty =<< o2
+  in forceRight o3
+
+projectColFunctionUntyped ::
+  (DynColumn -> DynColumn) -> UntypedLocalData -> LocalFrame
+projectColFunctionUntyped f obs = do
+  -- Create a placeholder dataset and a corresponding column.
+  let dt = unSQLType (nodeType obs)
+  -- Pass them to the function.
+  let no = NodeDistributedLit dt V.empty
+  let ds = emptyDataset no (SQLType dt)
+  let c = asCol ds
+  colRes <- f (pure (dropColType c))
+  let dtOut = unSQLType $ colType colRes
+  -- This will fail if there is a broadcast.
+  co <- _replaceObservables M.empty (colOp colRes)
+  let op = NodeStructuredTransform co
+  return $ emptyLocalData op (SQLType dtOut)
+              `parents` [untyped obs]
+
 {-| Takes a function that operates on columns, and projects this
 function onto the same operations for observables.
 
@@ -165,24 +207,23 @@ This is not very smart at the moment and will miss the more
 complex operations such as broadcasting, etc.
 -}
 -- TODO: use for the numerical transforms instead of special stuff.
-projectColFunction ::
-    (UntypedColumnData -> Try UntypedColumnData) ->
-    UntypedLocalData ->
-    Try UntypedLocalData
-projectColFunction f obs = do
-  -- Create a placeholder dataset and a corresponding column.
-  let dt = unSQLType (nodeType obs)
-  -- Pass them to the function.
-  let no = NodeDistributedLit dt V.empty
-  let ds = emptyDataset no (SQLType dt)
-  let c = asCol ds
-  colRes <- f (dropColType c)
-  let dtOut = unSQLType $ colType colRes
-  -- This will fail if there is a broadcast.
-  co <- _replaceObservables M.empty (colOp colRes)
-  let op = NodeStructuredTransform co
-  return $ emptyLocalData op (SQLType dtOut)
-              `parents` [untyped obs]
+projectColFunction' ::
+    (DynColumn -> DynColumn) ->
+    LocalFrame -> LocalFrame
+projectColFunction' f obs = projectColFunctionUntyped f =<< obs
+
+projectColFunction2' ::
+  (DynColumn -> DynColumn -> DynColumn) ->
+  LocalFrame ->
+  LocalFrame ->
+  LocalFrame
+projectColFunction2' f o1' o2' = do
+  let f2 :: DynColumn -> DynColumn
+      f2 dc = f (dc /- "_1") (dc /- "_2")
+  o1 <- o1'
+  o2 <- o2'
+  let o = iPackTupleObs $ o1 N.:| [o2]
+  projectColFunctionUntyped f2 o
 
 colOpNoBroadcast :: GeneralizedColOp -> Try ColOp
 colOpNoBroadcast = _replaceObservables M.empty

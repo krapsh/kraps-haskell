@@ -29,9 +29,11 @@ spec = do
       let z3 = c1 + 1
       let z4 = 1 + c1
       'a' `shouldBe` 'a'
-    it ".+ should not blow up" $ do
+    it ".+ should not blow up with colums" $ do
       let z1 = c1 .+ c2
       let z2 = c1' .+ c2'
       let z3 = c1 .+ c2'
       let z4 = c1' .+ c2
+      let z5 = c1 .+ o1
+      let z6 = c1 .+ o1'
       'a' `shouldBe` 'a'

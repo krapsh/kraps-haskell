@@ -27,6 +27,7 @@ library
                        Spark.Core.Dataset,
                        Spark.Core.Functions,
                        Spark.Core.Internal.Arithmetics,
+                       Spark.Core.Internal.ArithmeticsImpl,
                        Spark.Core.Internal.Caching,
                        Spark.Core.Internal.CanRename,
                        Spark.Core.Internal.Client,

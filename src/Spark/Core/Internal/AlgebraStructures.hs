@@ -31,9 +31,9 @@ applyBinOp :: forall in1 in2 to. (HomoBinaryOp2 in1 in2 to) => (to -> to -> to) 
 applyBinOp f i1 i2 =
   _applyBinOp0 i1 i2 (_liftFun f)
 
--- | Overloaded operator for operationts that are guaranteed to succeed.
-(.+) :: (Num out, HomoBinaryOp2 a1 a2 out) => a1 -> a2 -> out
-(.+) = applyBinOp (+)
+-- -- | Overloaded operator for operationts that are guaranteed to succeed.
+-- (.+) :: (Num out, HomoBinaryOp2 a1 a2 out) => a1 -> a2 -> out
+-- (.+) = applyBinOp (+)
 
 (.-) :: (Num out, HomoBinaryOp2 a1 a2 out) => a1 -> a2 -> out
 (.-) = applyBinOp (-)
