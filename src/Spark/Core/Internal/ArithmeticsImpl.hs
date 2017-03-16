@@ -1,14 +1,20 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
+-- Disabled for old versions
+-- {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+-- Required by old versions
+{-# LANGUAGE FlexibleContexts #-}
 
 {-| This module contains all the class instances and operators related
 to arithmetics with Datasets, Dataframes, Columns and Observables.
 -}
 module Spark.Core.Internal.ArithmeticsImpl(
   (.+),
+  (.-),
+  (./),
+  div'
   ) where
 
 import Spark.Core.Internal.ColumnFunctions
@@ -23,8 +29,21 @@ import Spark.Core.Internal.Arithmetics
 -}
 (.+) :: forall a1 a2. (Num a1, Num a2, GeneralizedHomo2 a1 a2) =>
   a1 -> a2 -> GeneralizedHomoReturn a1 a2
-(.+) = performOp (homoColOp2 "sum")
+(.+) = performOp (homoColOp2 "+")
 
+{-| A generalization of the negation for the Kraps types.
+-}
+(.-) :: forall a1 a2. (Num a1, Num a2, GeneralizedHomo2 a1 a2) =>
+  a1 -> a2 -> GeneralizedHomoReturn a1 a2
+(.-) = performOp (homoColOp2 "-")
+
+(./) :: (Fractional a1, Fractional a2, GeneralizedHomo2 a1 a2) =>
+  a1 -> a2 -> GeneralizedHomoReturn a1 a2
+(./) = performOp (homoColOp2 "/")
+
+div' :: forall a1 a2. (Num a1, Num a2, GeneralizedHomo2 a1 a2) =>
+  a1 -> a2 -> GeneralizedHomoReturn a1 a2
+div' = performOp (homoColOp2 "/")
 
 -- All the operations are defined from column operations
 -- This adds a little overhead, but it can be optimized by the backend.

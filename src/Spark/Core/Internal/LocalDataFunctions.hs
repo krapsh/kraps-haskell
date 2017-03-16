@@ -18,6 +18,7 @@ import Control.Exception.Base(assert)
 
 import Spark.Core.Internal.DatasetFunctions
 import Spark.Core.Internal.DatasetStructures
+import Spark.Core.Internal.ColumnStandard
 import Spark.Core.Internal.TypesFunctions
 import Spark.Core.Internal.TypesStructures
 import Spark.Core.Internal.OpStructures

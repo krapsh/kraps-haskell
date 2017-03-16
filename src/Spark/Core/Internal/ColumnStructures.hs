@@ -11,6 +11,7 @@ import Data.Function(on)
 import Data.Vector(Vector)
 
 import Spark.Core.Internal.DatasetStructures
+import Spark.Core.Internal.DatasetFunctions()
 import Spark.Core.Internal.RowStructures
 import Spark.Core.Internal.TypesStructures
 import Spark.Core.Internal.OpStructures
@@ -55,12 +56,12 @@ data GeneralizedColOp =
     -- This is the extra operation that needs to be flattened with a broadcast.
   | BroadcastColOp !UntypedLocalData
   | GenColStruct !(Vector GeneralizedTransField)
-  deriving (Eq)
+  deriving (Eq, Show)
 
 data GeneralizedTransField = GeneralizedTransField {
   gtfName :: !FieldName,
   gtfValue :: !GeneralizedColOp
-} deriving (Eq)
+} deriving (Eq, Show)
 
 {-| A column of data from a dataset or a dataframe.
 

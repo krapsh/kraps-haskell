@@ -30,6 +30,7 @@ module Spark.Core.Internal.ColumnFunctions(
   unsafeProjectCol,
   genColOp,
   homoColOp2,
+  makeColOp1,
   -- -- Developer API (projection builders)
   -- dynamicProjection,
   -- stringToDynColProj,
@@ -249,12 +250,32 @@ iEmptyCol = _emptyColData
 colExtraction :: Dataset a -> DataType -> FieldPath -> DynColumn
 colExtraction ds dt fp = pure $ dropColReference $ _emptyColData ds (SQLType dt) fp
 
+-- | Homogeneous operation betweet 2 columns.
+homoColOp2 :: T.Text -> Column ref x -> Column ref x -> Column ref x
+homoColOp2 opName c1 c2 =
+  let co = GenColFunction opName (V.fromList (colOp <$> [c1, c2]))
+  in ColumnData {
+      _cOrigin = _cOrigin c1,
+      _cType = _cType c1,
+      _cOp = co,
+      _cReferingPath = Nothing }
+
+makeColOp1 :: T.Text -> SQLType y -> Column ref x -> Column ref y
+makeColOp1 opName sqlt c =
+  let co = GenColFunction opName (V.fromList (colOp <$> [c]))
+  in ColumnData {
+      _cOrigin = _cOrigin c,
+      _cType = unSQLType sqlt,
+      _cOp = co,
+      _cReferingPath = Nothing }
+
 _prettyShowColOp :: GeneralizedColOp -> T.Text
 _prettyShowColOp (GenColExtraction fp) = prettyShowColOp (ColExtraction fp)
 _prettyShowColOp (GenColFunction n v) =
   prettyShowColFun n (V.toList (_prettyShowColOp <$> v))
 _prettyShowColOp (GenColLit _ c) = show' c
-_prettyShowColOp (BroadcastColOp uld) = "BROADCAST(" <> show' uld <> ")"
+_prettyShowColOp (BroadcastColOp uld) =
+  "BROADCAST(" <> prettyNodePath (nodePath uld) <> ")"
 _prettyShowColOp (GenColStruct v) =
   "struct(" <> T.intercalate "," (_prettyShowColOp . gtfValue <$> V.toList v) <> ")"
 
@@ -266,16 +287,6 @@ _emptyColData ds sqlt path = ColumnData {
   _cOp = GenColExtraction path,
   _cReferingPath = Nothing
 }
-
--- | Homogeneous operation betweet 2 columns.
-homoColOp2 :: T.Text -> Column ref x -> Column ref x -> Column ref x
-homoColOp2 opName c1 c2 =
-  let co = GenColFunction opName (V.fromList (colOp <$> [c1, c2]))
-  in ColumnData {
-      _cOrigin = _cOrigin c1,
-      _cType = _cType c1,
-      _cOp = co,
-      _cReferingPath = Nothing }
 
 _homoColOp2' :: T.Text -> DynColumn -> DynColumn -> DynColumn
 _homoColOp2' opName c1' c2' = do
@@ -311,18 +322,22 @@ instance forall ref a. HomoBinaryOp2 (Column ref a) DynColumn DynColumn where
 instance forall ref a. HomoBinaryOp2 DynColumn (Column ref a) DynColumn where
   _liftFun = BinaryOpFun id untypedCol
 
+instance (Fractional x) => Fractional (Column ref x) where
+  (/) = homoColOp2 "/"
+  recip = missing "Fractional (Column ref x): recip"
+  fromRational = missing "Fractional (Column ref x): fromRational"
 
 instance (Num x) => Num (Column ref x) where
-  (+) = homoColOp2 "sum"
-  (*) _ _ = missing "Num (Column x): *"
+  (+) = homoColOp2 "+"
+  (*) = homoColOp2 "*"
   abs _ = missing "Num (Column x): abs"
   signum _ = missing "Num (Column x): signum"
   fromInteger _ = missing "Num (Column x): fromInteger"
   negate _ = missing "Num (Column x): negate"
 
 instance Num DynColumn where
-  (+) = _homoColOp2' "sum"
-  (*) _ _ = missing "Num (DynColumn x): *"
+  (+) = _homoColOp2' "+"
+  (*) = _homoColOp2' "*"
   abs _ = missing "Num (DynColumn x): abs"
   signum _ = missing "Num (DynColumn x): signum"
   fromInteger _ = missing "Num (DynColumn x): fromInteger"

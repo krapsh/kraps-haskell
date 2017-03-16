@@ -464,7 +464,7 @@ castType sqlt n = do
   if dt `compatibleTypes` dt'
     then let n' = updateNode n (\node -> node { _cnType = dt }) in
       pure (_unsafeCastNode n')
-    else tryError $ sformat ("Casting error: dataframe has type "%sh%" incompatible with type "%sh) dt' dt
+    else tryError $ sformat ("castType: Casting error: dataframe has type "%sh%" incompatible with type "%sh) dt' dt
 
 castType' :: SQLType a -> Try (ComputeNode loc Cell) -> Try (ComputeNode loc a)
 castType' sqlt df = df >>= castType sqlt

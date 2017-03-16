@@ -34,7 +34,7 @@ import Spark.Core.Try
 simpleShowOp :: NodeOp -> T.Text
 simpleShowOp (NodeLocalOp op) = soName op
 simpleShowOp (NodeDistributedOp op) = soName op
-simpleShowOp (NodeLocalLit _ _) = "org.spark.LocalConstant"
+simpleShowOp (NodeLocalLit _ _) = "org.spark.LocalLiteral"
 simpleShowOp (NodeOpaqueAggregator op) = soName op
 simpleShowOp (NodeAggregatorReduction uao) =
   case uaoInitialOuter uao of
@@ -42,7 +42,7 @@ simpleShowOp (NodeAggregatorReduction uao) =
     _ -> "org.spark.StructuredReduction"
 simpleShowOp (NodeAggregatorLocalReduction ua) = _prettyShowSGO . uaoMergeBuffer $ ua
 simpleShowOp (NodeStructuredTransform _) = "org.spark.Select"
-simpleShowOp (NodeDistributedLit _ _) = "org.spark.Constant"
+simpleShowOp (NodeDistributedLit _ _) = "org.spark.DistributedLiteral"
 simpleShowOp (NodeGroupedReduction _) = "org.spark.GroupedReduction"
 simpleShowOp (NodeReduction _) = "org.spark.Reduction"
 simpleShowOp NodeBroadcastJoin = "org.spark.BroadcastJoin"
@@ -151,12 +151,12 @@ hashUpdateNodeOp ctx op = _hashUpdateJson ctx $ A.object [
 
 prettyShowColFun :: T.Text -> [Text] -> T.Text
 prettyShowColFun txt [col] | _isSym txt =
-  T.concat [txt, col]
+  T.concat [txt, " ", col]
 prettyShowColFun txt [col1, col2] | _isSym txt =
   -- This is not perfect for complex operations, but it should get the job done
   -- for now.
   -- TODO eventually use operator priority here
-  T.concat [col1, txt, col2]
+  T.concat [col1, " ", txt, " ", col2]
 prettyShowColFun txt cols =
   let vals = T.intercalate ", " cols in
   T.concat [txt, "(", vals, ")"]

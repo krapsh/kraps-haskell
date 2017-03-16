@@ -72,6 +72,10 @@ instance FromSQL Int where
   _cellToValue (IntElement x) = pure x
   _cellToValue x = throwError $ sformat ("FromSQL: Decoding an int from "%shown) x
 
+instance FromSQL Double where
+  _cellToValue (DoubleElement x) = pure x
+  _cellToValue x = throwError $ sformat ("FromSQL: Decoding a double from "%shown) x
+
 instance FromSQL Text where
   _cellToValue (StringElement txt) = pure txt
   _cellToValue x = throwError $ sformat ("FromSQL: Decoding a unicode text from "%shown) x

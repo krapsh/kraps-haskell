@@ -1,6 +1,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
+-- Required by old versions
+{-# LANGUAGE FlexibleContexts #-}
 
 module Spark.Core.Internal.Arithmetics(
   GeneralizedHomoReturn,

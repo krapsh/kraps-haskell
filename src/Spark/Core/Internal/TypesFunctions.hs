@@ -160,6 +160,7 @@ _decodeLeafStrict dtr l =
 
 _compatibleTypesStrict :: StrictDataType -> StrictDataType -> Bool
 _compatibleTypesStrict IntType IntType = True
+_compatibleTypesStrict DoubleType DoubleType = True
 _compatibleTypesStrict StringType StringType = True
 _compatibleTypesStrict (ArrayType et) (ArrayType et') = compatibleTypes et et'
 _compatibleTypesStrict (Struct (StructType v)) (Struct (StructType v')) =
