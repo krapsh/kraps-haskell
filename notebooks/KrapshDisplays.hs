@@ -21,12 +21,14 @@ import Spark.Core.Internal.DAGStructures
 import Spark.Core.Internal.DatasetFunctions(untyped)
 import Spark.Core.Internal.DatasetStructures(ComputeNode)
 import Spark.Core.Internal.Utilities(forceRight)
+import Spark.Core.Internal.Client
 import Spark.Core.Try
 
 instance IHaskellDisplay DisplayGraph where
   display g = return $ Display [html code]
     where
       code = unpack . tfIFrame . exportNodes $ g
+
 
 showGraph = display . forceRight . nodeToDisplayGraph
 

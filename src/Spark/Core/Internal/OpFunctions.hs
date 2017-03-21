@@ -5,6 +5,7 @@
 
 module Spark.Core.Internal.OpFunctions(
   simpleShowOp,
+  prettyShowOp,
   extraNodeOpData,
   hashUpdateNodeOp,
   prettyShowColOp,
@@ -36,10 +37,7 @@ simpleShowOp (NodeLocalOp op) = soName op
 simpleShowOp (NodeDistributedOp op) = soName op
 simpleShowOp (NodeLocalLit _ _) = "org.spark.LocalLiteral"
 simpleShowOp (NodeOpaqueAggregator op) = soName op
-simpleShowOp (NodeAggregatorReduction uao) =
-  case uaoInitialOuter uao of
-    OpaqueAggTransform so -> soName so
-    _ -> "org.spark.StructuredReduction"
+simpleShowOp (NodeAggregatorReduction _) = "org.spark.StructuredReduction"
 simpleShowOp (NodeAggregatorLocalReduction ua) = _prettyShowSGO . uaoMergeBuffer $ ua
 simpleShowOp (NodeStructuredTransform _) = "org.spark.Select"
 simpleShowOp (NodeDistributedLit _ _) = "org.spark.DistributedLiteral"
@@ -47,6 +45,18 @@ simpleShowOp (NodeGroupedReduction _) = "org.spark.GroupedReduction"
 simpleShowOp (NodeReduction _) = "org.spark.Reduction"
 simpleShowOp NodeBroadcastJoin = "org.spark.BroadcastJoin"
 simpleShowOp (NodePointer _) = "org.spark.PlaceholderCache"
+
+{-| A text representation of the operation that is appealing for humans.
+-}
+prettyShowOp :: NodeOp -> T.Text
+prettyShowOp (NodeAggregatorReduction uao) =
+  case uaoInitialOuter uao of
+    OpaqueAggTransform so -> soName so
+    -- Try to have a pretty name for the simple reductions
+    InnerAggOp (AggFunction n _) -> n
+    _ -> simpleShowOp (NodeAggregatorReduction uao)
+prettyShowOp x = simpleShowOp x
+
 
 -- A human-readable string that represents column operations.
 prettyShowColOp :: ColOp -> T.Text

@@ -220,9 +220,9 @@ updateCache c l = do
 _updateCache1 :: ComputationID -> (NodeId, NodePath, DataType, PossibleNodeStatus) -> SparkStatePure (Maybe (NodeId, Try Cell), Maybe (NodePath, NodeCacheStatus))
 _updateCache1 cid (nid, p, dt, status) =
   case status of
-    (NodeFinishedSuccess s) -> do
+    (NodeFinishedSuccess (Just s) _) -> do
       updated <- _insertCacheUpdate cid nid p NodeCacheSuccess
-      let res2 = _extract1 (Right s) dt
+      let res2 = _extract1 (pure s) dt
       return (Just (nid, res2), (p, ) <$> updated)
     (NodeFinishedFailure e) -> do
       updated <- _insertCacheUpdate cid nid p NodeCacheError

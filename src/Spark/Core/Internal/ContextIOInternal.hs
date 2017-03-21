@@ -11,7 +11,8 @@ module Spark.Core.Internal.ContextIOInternal(
   executeCommand1',
   checkDataStamps,
   updateSourceInfo,
-  createComputation
+  createComputation,
+  computationStats
 ) where
 
 import Control.Concurrent(threadDelay)
@@ -126,6 +127,15 @@ waitForCompletion comp = do
   case filter (\z -> fst z == targetNid) nrs' of
     [(_, tc)] -> return tc
     l -> return $ tryError $ "Expected single result, got " <> show' l
+
+{-| Exposed for debugging -}
+computationStats ::
+  ComputationID -> SparkState BatchComputationResult
+computationStats cid = do
+  logDebugN $ "computationStats: stats for " <> show' cid
+  session <- get
+  x <- _computationStats session cid
+  return x
 
 {-| Exposed for debugging -}
 createComputation :: ComputeGraph -> SparkState (Try Computation)
@@ -357,12 +367,26 @@ _computationMultiStatus cid done l = do
 _try :: (Monad m) => (y -> m z) -> (x, x', x'', y) -> m (x, x', x'', z)
 _try f (x, x', x'', y) = f y <&> \z -> (x, x', x'', z)
 
+_computationStats :: (MonadLoggerIO m) =>
+  SparkSession -> ComputationID -> m BatchComputationResult
+_computationStats session compId = do
+  let url = _compEndPointStatus session compId <> "/" -- The final / is mandatory
+  logDebugN $ "Sending computations stats request at url: " <> url
+  -- _ <- _get url
+  -- raw <- _get url
+  --logDebugN $ sformat ("Got raw status: "%sh) raw
+  stats <- liftIO (W.asJSON =<< W.get (T.unpack url) :: IO (W.Response BatchComputationResult))
+  --logDebugN $ sformat ("Got status: "%sh) status
+  let s = stats ^. responseBody
+  return s
+
+
 _waitSingleComputation :: (MonadLoggerIO m) =>
   SparkSession -> Computation -> NodeName -> m FinalResult
 _waitSingleComputation session comp nname =
   let
     extract :: PossibleNodeStatus -> Maybe FinalResult
-    extract (NodeFinishedSuccess s) = Just $ Right s
+    extract (NodeFinishedSuccess (Just s) _) = Just $ Right s
     extract (NodeFinishedFailure f) = Just $ Left f
     extract _ = Nothing
     -- getStatus :: m PossibleNodeStatus

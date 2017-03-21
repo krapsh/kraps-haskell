@@ -107,7 +107,7 @@ _sumAgg' :: DataType -> AggTry UniversalAggregatorOp
 _sumAgg' dt = pure UniversalAggregatorOp {
     uaoMergeType = dt,
     uaoInitialOuter = InnerAggOp $ AggFunction "SUM" (V.singleton emptyFieldPath),
-    uaoMergeBuffer = ColumnSemiGroupLaw "SUM"
+    uaoMergeBuffer = ColumnSemiGroupLaw "SUM_SL"
   }
 
 _countAgg' :: DataType -> AggTry UniversalAggregatorOp

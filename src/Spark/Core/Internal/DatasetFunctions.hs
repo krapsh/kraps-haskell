@@ -431,7 +431,7 @@ instance forall loc a. Show (ComputeNode loc a) where
       TypedLocality Local -> "!"
       TypedLocality Distributed -> ":"
     nn = unNodeName . nodeName $ ld
-    no = simpleShowOp . nodeOp $ ld
+    no = prettyShowOp . nodeOp $ ld
     fields = T.pack . show . nodeType $ ld in
       T.unpack $ toStrict $ TF.format txt (nn, no, loc, fields)
 
@@ -526,7 +526,7 @@ _nodeId node =
 
 _defaultNodeName :: ComputeNode loc a -> NodeName
 _defaultNodeName node =
-  let opName = (simpleShowOp . nodeOp) node
+  let opName = (prettyShowOp . nodeOp) node
       namePieces = T.splitOn (T.pack ".") opName
       lastOpt = (listToMaybe . reverse) namePieces
       l = fromMaybe (T.pack "???") lastOpt

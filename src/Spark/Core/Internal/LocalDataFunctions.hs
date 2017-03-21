@@ -18,7 +18,6 @@ import Control.Exception.Base(assert)
 
 import Spark.Core.Internal.DatasetFunctions
 import Spark.Core.Internal.DatasetStructures
-import Spark.Core.Internal.ColumnStandard
 import Spark.Core.Internal.TypesFunctions
 import Spark.Core.Internal.TypesStructures
 import Spark.Core.Internal.OpStructures
@@ -47,7 +46,7 @@ iPackTupleObs ulds =
                 soExtra = Null }
       op = NodeLocalOp so
   in emptyLocalData op (SQLType dt)
-        `parents` (untyped <$> (N.toList ulds))
+        `parents` (untyped <$> N.toList ulds)
 
 instance (Num a, ToSQL a, SQLTypeable a) => Num (LocalData a) where
   -- TODO: convert all that to use column operations

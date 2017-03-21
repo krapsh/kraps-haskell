@@ -19,8 +19,10 @@ module Spark.Core.Context(
   defaultConf,
   executeCommand1,
   executeCommand1',
+  computationStats,
   createSparkSessionDef,
   closeSparkSessionDef,
+  computationStatsDef,
   exec1Def,
   exec1Def',
   execStateDef

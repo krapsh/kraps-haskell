@@ -10,12 +10,15 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
 import qualified Data.Map.Strict as M
 import qualified Data.Vector as V
+import Data.Maybe(mapMaybe, catMaybes)
 import Data.Hashable
 import Formatting
+import Control.Arrow((&&&))
 
 import Spark.Core.Internal.DAGStructures
 import Spark.Core.Internal.DAGFunctions
 import Spark.Core.Internal.Utilities
+import Spark.Core.Internal.Client
 import Spark.Core.Internal.DatasetStructures
 import Spark.Core.Internal.DatasetFunctions
 import Spark.Core.Internal.OpFunctions
@@ -96,6 +99,33 @@ exportNodes g =
          enLogicalDeps = logical,
          enAttributes = M.toList $ dnAttributes n
        }
+
+statsToExportNodes :: BatchComputationResult -> [ExportNode]
+statsToExportNodes (BatchComputationResult l) =
+  -- Just get the RDD info
+  let
+    f (np, (NodeFinishedSuccess _ (Just (SparkComputationItemStats l')))) = [(np, x) | x <- l']
+    f _ = []
+    xs = concat $ f <$> l
+    -- Find the mapping from RDD id -> path
+    f2 (np, rddinfo) =
+      let id' = unRDDId (rddiId rddinfo)
+          rddName = rddiClassName rddinfo <> "-" <> show' id'
+          p = catNodePath np <> "/" <> rddName
+      in (rddiId rddinfo, p)
+    paths = myGroupBy (f2 <$> xs)
+    f3 rinfo =
+      let p' = head $ paths M.! (rddiId rinfo)
+          ps = concat $ catMaybes $ (rddiParents rinfo) <&> \rid -> M.lookup rid paths
+      in ExportNode {
+           enName = p',
+           enOp = rddiClassName rinfo,
+           enDeps = ps,
+           enLogicalDeps = [],
+           enAttributes = [("name", rddiRepr rinfo)]
+          }
+  -- TODO: add some post-processing to make sure that the graph is correct
+  in f3 . snd <$> xs
 
 _attributes :: [(T.Text, T.Text)] -> L.Text
 _attributes dct =
