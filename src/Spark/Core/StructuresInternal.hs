@@ -125,8 +125,15 @@ instance IsString FieldName where
 instance A.ToJSON NodeName where
   toJSON = A.toJSON . unNodeName
 
+instance A.FromJSON NodeName where
+  -- TODO: more parse checks
+  parseJSON x = NodeName <$> A.parseJSON x
+
 instance A.ToJSON NodePath where
   toJSON = A.toJSON . unNodePath
+
+instance A.FromJSON NodePath where
+  parseJSON x = NodePath <$> A.parseJSON x
 
 instance A.ToJSON FieldName where
   toJSON = A.toJSON . unFieldName

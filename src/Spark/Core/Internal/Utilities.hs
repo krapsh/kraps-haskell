@@ -65,12 +65,14 @@ encodeDeterministicPretty =
   encodePretty' (defConfig { confIndent = Spaces 0, confCompare = compare })
 
 -- | group by
+-- TODO: have a non-empty list instead
 myGroupBy' :: (Ord b) => (a -> b) -> [a] -> [(b, [a])]
 myGroupBy' f = map (f . head &&& id)
                    . groupBy ((==) `on` f)
                    . sortBy (compare `on` f)
 
 -- | group by
+-- TODO: have a non-empty list instead
 myGroupBy :: (Ord a) => [(a, b)] -> M.Map a [b]
 myGroupBy l = let
   l2 = myGroupBy' fst l in

@@ -13,7 +13,6 @@ import Spark.Core.Internal.TypesFunctions()
 import Data.Text(Text, pack)
 import Data.Aeson
 import Data.Aeson.Types(Parser)
-import qualified Data.Vector as V
 import GHC.Generics
 
 
@@ -45,11 +44,13 @@ data Computation = Computation {
 
 data BatchComputationKV = BatchComputationKV {
   bckvLocalPath :: !NodePath,
+  bckvDeps :: ![NodePath],
   bckvResult :: !PossibleNodeStatus
 } deriving (Show, Generic)
 
 data BatchComputationResult = BatchComputationResult {
-  bcrResults :: ![(NodePath, PossibleNodeStatus)]
+  bcrTargetLocalPath :: !NodePath,
+  bcrResults :: ![(NodePath, [NodePath], PossibleNodeStatus)]
 } deriving (Show, Generic)
 
 data RDDInfo = RDDInfo {
@@ -104,17 +105,17 @@ instance FromJSON SparkComputationItemStats where
 
 instance FromJSON BatchComputationKV where
   parseJSON = withObject "BatchComputationKV" $ \o -> do
-    lp <- o .: "localPath"
+    np <- o .: "localPath"
+    deps <- o .: "pathDependencies"
     res <- o .: "result"
-    -- TODO(kps) this could be guarded against issues
-    let np = NodePath $ V.fromList (NodeName <$> lp)
-    return $ BatchComputationKV np res
+    return $ BatchComputationKV np deps res
 
 instance FromJSON BatchComputationResult where
   parseJSON = withObject "BatchComputationResult" $ \o -> do
     kvs <- o .: "results"
-    let f (BatchComputationKV k v) = (k, v)
-    return $ BatchComputationResult (f <$> kvs)
+    tlp <- o .: "targetLocalPath"
+    let f (BatchComputationKV k d v) = (k, d, v)
+    return $ BatchComputationResult tlp (f <$> kvs)
 
 instance FromJSON NodeComputationSuccess where
   parseJSON = withObject "NodeComputationSuccess" $ \o -> NodeComputationSuccess

@@ -10,6 +10,8 @@ import qualified Data.Text as T
 import qualified Data.Text.Lazy as L
 import qualified Data.Map.Strict as M
 import qualified Data.Vector as V
+import qualified Data.Set as S
+import qualified Data.ByteString.Char8 as C8
 import Data.Maybe(mapMaybe, catMaybes)
 import Data.Hashable
 import Formatting
@@ -27,6 +29,7 @@ import Spark.Core.Internal.ContextStructures
 import Spark.Core.Internal.ComputeDag
 import Spark.Core.Internal.ContextInternal
 import Spark.Core.StructuresInternal
+import Spark.Core.Internal.DAGFunctions(pruneLexicographic)
 import Spark.Core.Try
 
 
@@ -100,11 +103,12 @@ exportNodes g =
          enAttributes = M.toList $ dnAttributes n
        }
 
+-- TODO: this code uses unsafe functions...
 statsToExportNodes :: BatchComputationResult -> [ExportNode]
-statsToExportNodes (BatchComputationResult l) =
+statsToExportNodes (BatchComputationResult _ l) =
   -- Just get the RDD info
   let
-    f (np, (NodeFinishedSuccess _ (Just (SparkComputationItemStats l')))) = [(np, x) | x <- l']
+    f (np, _, NodeFinishedSuccess _ (Just (SparkComputationItemStats l'))) = [(np, x) | x <- l']
     f _ = []
     xs = concat $ f <$> l
     -- Find the mapping from RDD id -> path
@@ -113,10 +117,19 @@ statsToExportNodes (BatchComputationResult l) =
           rddName = rddiClassName rddinfo <> "-" <> show' id'
           p = catNodePath np <> "/" <> rddName
       in (rddiId rddinfo, p)
-    paths = myGroupBy (f2 <$> xs)
+    paths = M.map head $ myGroupBy (f2 <$> xs)
+    -- Find a start point for each of the observed nodes
+    isObserved (np, _, NodeFinishedSuccess (Just _) (Just (SparkComputationItemStats l'))) = [(np, rddiId x) | x <- l']
+    isObserved _ = []
+    observedPathsWithRDDIds = myGroupBy $ concat $ isObserved <$> l
+    -- Use the maximum RDD id as the start point (which corresponds to the last created RDD)
+    observedBestMap = traceHint "observedBestMap=" $ M.map maximum observedPathsWithRDDIds
+    observedBestIds = snd <$> M.toList observedBestMap
+    observedBestPaths = catMaybes [M.lookup rid paths | rid <- observedBestIds]
+    makeVertexId = VertexId . C8.pack . T.unpack
     f3 rinfo =
-      let p' = head $ paths M.! (rddiId rinfo)
-          ps = concat $ catMaybes $ (rddiParents rinfo) <&> \rid -> M.lookup rid paths
+      let p' = paths M.! rddiId rinfo
+          ps = catMaybes $ rddiParents rinfo <&> \rid -> M.lookup rid paths
       in ExportNode {
            enName = p',
            enOp = rddiClassName rinfo,
@@ -124,8 +137,67 @@ statsToExportNodes (BatchComputationResult l) =
            enLogicalDeps = [],
            enAttributes = [("name", rddiRepr rinfo)]
           }
-  -- TODO: add some post-processing to make sure that the graph is correct
-  in f3 . snd <$> xs
+    toNode en = (makeVertexId (enName en), makeVertexId <$> enDeps en, en)
+    -- Build all the export nodes
+    nodes = f3 . snd <$> xs
+    ens = toNode <$> nodes
+    -- Post-processing 1: keep only the nodes that are tied to observations
+    tiedPaths = S.fromList $ enName <$> concat (observedBestPaths <&> \p ->
+      pruneLexicographic (makeVertexId p) ens)
+    reachableNodes = traceHint "reachableNodes" $ filter (\x -> S.member (enName x) tiedPaths) nodes
+    -- Post-processing 2: add logical dependency edges between blocks that
+    -- seem unconnected, but for which we know there exists a dependency.
+    -- The observables break naturally by their very nature of collecting.
+    -- Compute the existing dependencies between nodes.
+
+    -- TODO this is an approximation: these ids may be dropped during
+    -- the pruning (unlike the best ids above)
+    observedFirstIds = traceHint "observedFirstIds" $ M.map minimum observedPathsWithRDDIds
+    txtToPath :: T.Text -> (NodePath, RDDId)
+    txtToPath x =
+      let s = T.splitOn "/" x
+          x2 = read (T.unpack . last $ T.splitOn "-" (last s)) :: Int
+          p = NodePath . V.fromList $ (NodeName <$> init s)
+      in (p, RDDId x2)
+    existingDeps = S.fromList $ concat $ reachableNodes <&> \n ->
+      let from' = fst . txtToPath . enName $ n
+          to' = fst . txtToPath <$> enDeps n
+      in [(from', to'') | to'' <- to']
+    allDeps = traceHint "allDeps=" $ concat $ l <&> \(np, depsNp, _) -> (const np &&& id) <$> depsNp
+    allTransDepsMap = traceHint "allTransDeps=" $ _subsetTransitive (myGroupBy allDeps) (M.keysSet observedPathsWithRDDIds)
+    allTransDeps = [(f',t) | (f', ts) <- M.toList allTransDepsMap, t <- ts]
+    missingDeps = traceHint "missingDeps=" $ filter (\z -> not (S.member z existingDeps)) allTransDeps
+    missingDepsMap = traceHint "missingDepsMap=" $ myGroupBy $ missingDeps <&> \(f', t) ->
+      let startId = observedFirstIds M.! f'
+          endId = observedBestMap M.! t
+          fp = paths M.! startId
+          tp = paths M.! endId
+      in (fp, tp)
+    reachableNodesWithDeps = reachableNodes <&> \n ->
+      case M.lookup (enName n) missingDepsMap of
+        Just l' -> n { enLogicalDeps = l' }
+        Nothing -> n
+  in reachableNodesWithDeps
+
+-- Given a set of nodes forming dependencies and a subset of these nodes,
+-- makes the graph that corresponds to pruning out all the other nodes
+-- and following the transitive dependencies.
+_subsetTransitive :: (Ord a) => M.Map a [a] -> S.Set a -> M.Map a [a]
+_subsetTransitive m stops =
+  M.fromList $ S.toList stops <&> \x ->
+      let deps = _expand m stops S.empty (M.findWithDefault [] x m)
+      in (x, S.toList deps)
+
+
+_expand :: (Ord a) => M.Map a [a] -> S.Set a -> S.Set a -> [a] -> S.Set a
+_expand _ _ seen [] = seen
+_expand deps stops seen (h : t) =
+  if S.member h seen
+  then _expand deps stops seen t
+  else
+    if S.member h stops
+    then _expand deps stops (S.insert h seen) t
+    else _expand deps stops seen (M.findWithDefault [] h deps ++ t)
 
 _attributes :: [(T.Text, T.Text)] -> L.Text
 _attributes dct =
