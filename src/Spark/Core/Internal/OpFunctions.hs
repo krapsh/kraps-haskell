@@ -37,8 +37,9 @@ simpleShowOp (NodeLocalOp op) = soName op
 simpleShowOp (NodeDistributedOp op) = soName op
 simpleShowOp (NodeLocalLit _ _) = "org.spark.LocalLiteral"
 simpleShowOp (NodeOpaqueAggregator op) = soName op
-simpleShowOp (NodeAggregatorReduction _) = "org.spark.StructuredReduction"
-simpleShowOp (NodeAggregatorLocalReduction ua) = _prettyShowSGO . uaoMergeBuffer $ ua
+simpleShowOp (NodeAggregatorReduction ua) =
+  _jsonShowAggTrans . uaoInitialOuter $ ua
+simpleShowOp (NodeAggregatorLocalReduction ua) = _jsonShowSGO . uaoMergeBuffer $ ua
 simpleShowOp (NodeStructuredTransform _) = "org.spark.Select"
 simpleShowOp (NodeDistributedLit _ _) = "org.spark.DistributedLiteral"
 simpleShowOp (NodeGroupedReduction _) = "org.spark.GroupedReduction"
@@ -96,6 +97,16 @@ updateSourceStamp (NodeDistributedOp so) (DataInputStamp dis) | soName so == "or
     x -> tryError $ "updateSourceStamp: Expected dict, got " <> show' x
 updateSourceStamp x _ =
   tryError $ "updateSourceStamp: Expected NodeDistributedOp, got " <> show' x
+
+_jsonShowAggTrans :: AggTransform -> Text
+_jsonShowAggTrans (OpaqueAggTransform op) = soName op
+_jsonShowAggTrans (InnerAggOp _) = "org.spark.StructuredReduction"
+
+
+_jsonShowSGO :: SemiGroupOperator -> Text
+_jsonShowSGO (OpaqueSemiGroupLaw so) = soName so
+_jsonShowSGO (UdafSemiGroupOperator ucn) = ucn
+_jsonShowSGO (ColumnSemiGroupLaw sfn) = sfn
 
 
 _prettyShowAggOp :: AggOp -> T.Text

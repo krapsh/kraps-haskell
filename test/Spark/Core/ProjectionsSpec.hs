@@ -80,11 +80,11 @@ spec = do
     it "Basic arithmetic on DS cols" $ do
       let c1 = ds1//treeWidth'
       let c2 = (c1 + c1)
-      (show c2) `shouldSatisfy` ("treeWidth + treeWidth){int}" `isPrefixOf`)
+      (show c2) `shouldSatisfy` ("treeWidth + treeWidth{int}" `isPrefixOf`)
     it "Basic arithmetic on DF cols" $ do
       let c1 = df1 // treeWidth'
       let c2 = c1 + c1
-      (show c2) `shouldSatisfy` ("Right treeWidth + treeWidth){int}" `isPrefixOf`)
+      (show c2) `shouldSatisfy` ("Right treeWidth + treeWidth{int}" `isPrefixOf`)
     it "Construction of ds2" $ do
       let str = struct' [ (df1/-"treeId") @@ "sTreeId",
                           (df1/-"treeWidth") @@ "sTreeWidth",
@@ -110,4 +110,4 @@ spec = do
       let ds2 = forceRight ds2'
       let c1 = ds2//sTreeWidth'
       let c2 = c1 + c1
-      (show c2) `shouldSatisfy` ("sTreeWidth + sTreeWidth){int}" `isPrefixOf`)
+      (show c2) `shouldSatisfy` ("sTreeWidth + sTreeWidth{int}" `isPrefixOf`)

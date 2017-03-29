@@ -412,7 +412,7 @@ nodeOpToFun2Untyped dt no node1 node2 =
 {-| Low-level operator that takes an observable and propagates it along the
 content of an existing dataset.
 
-Users are recommended to use the Column-based `broadcast` function instead.
+Users are advised to use the Column-based `broadcast` function instead.
 -}
 broadcastPair :: Dataset a -> LocalData b -> Dataset (a, b)
 broadcastPair ds ld = n `parents` [untyped ds, untyped ld]
