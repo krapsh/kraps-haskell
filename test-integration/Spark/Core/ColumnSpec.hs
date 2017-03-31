@@ -28,13 +28,22 @@ myScaler col =
 spec :: Spec
 spec = do
   describe "local data operations" $ do
+    run "LocalPack (doubles)" $ do
+      let x = untypedLocalData (1 :: LocalData Double)
+      let x2 = iPackTupleObs (x :| [x])
+      res <- exec1Def x2
+      res `shouldBe` rowArray [DoubleElement 1, DoubleElement 1]
     run "LocalPack" $ do
       let x = untypedLocalData (1 :: LocalData Int)
       let x2 = iPackTupleObs (x :| [x])
       res <- exec1Def x2
       res `shouldBe` rowArray [IntElement 1, IntElement 1]
     run "BroadcastPair" $ do
-      undefined
+      let x = 1 :: LocalData Int
+      let ds = dataset [2, 3] :: Dataset Int
+      let ds2 = broadcastPair ds x
+      res <- exec1Def (collect (asCol ds2))
+      res `shouldBe` [(2, 1), (3, 1)]
   describe "columns - integration" $ do
     run "mean" $ do
       let ds = dataset [-1, 1] :: Dataset Double

@@ -18,6 +18,7 @@ module Spark.Core.Internal.Utilities(
   forceRight,
   show',
   encodeDeterministicPretty,
+  withContext,
   strictList,
   traceHint,
   SF.sh,
@@ -118,3 +119,7 @@ traceHint hint x = trace (T.unpack hint ++ show x) x
 -- | show with Text
 show' :: (Show a) => a -> Text
 show' x = T.pack (show x)
+
+withContext :: Text -> Either Text a -> Either Text a
+withContext _ (Right x) = Right x
+withContext msg (Left other) = Left (msg <> "\n>>" <> other)

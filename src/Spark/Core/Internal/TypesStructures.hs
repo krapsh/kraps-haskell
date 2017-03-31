@@ -190,6 +190,7 @@ instance FromJSON StructType where
 instance FromJSON StrictDataType where
   parseJSON (A.String s) = case s of
     "integer" -> return IntType
+    "double" -> return DoubleType
     "string" -> return StringType
     "bool" -> return BoolType
     -- TODO: figure out which one is correct

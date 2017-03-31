@@ -12,7 +12,7 @@ import Data.Maybe(catMaybes, listToMaybe)
 import Formatting
 import qualified Data.Vector as V
 import qualified Data.HashMap.Strict as HM
-import Data.Scientific(floatingOrInteger)
+import Data.Scientific(floatingOrInteger, toRealFloat)
 import Control.Monad.Except
 
 import Spark.Core.Internal.TypesStructures
@@ -27,7 +27,8 @@ type TryCell = Either Text Cell
 -- This operation requires a SQL type that describes
  -- the schema.
 jsonToCell :: DataType -> Value -> Either Text Cell
-jsonToCell dt v = _j2Cell v dt
+jsonToCell dt v = withContext ("jsonToCell: dt="<>show' dt<>" v="<>show' v) $
+  _j2Cell v dt
 
 {-| Given a datatype, ensures that the cell has the corresponding type.
 -}
@@ -92,6 +93,7 @@ _j2CellS (Array v) (ArrayType t) =
 _j2CellS (Number s) IntType = case floatingOrInteger s :: Either Double Int of
   Left _ -> throwError $ sformat ("_j2CellS: Could not cast as int "%shown) s
   Right i -> pure (IntElement i)
+_j2CellS (Number s) DoubleType = pure . DoubleElement . toRealFloat $ s
 -- Normal representation as object.
 _j2CellS (Object o) (Struct struct) =
   let

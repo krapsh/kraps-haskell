@@ -28,6 +28,7 @@ module Spark.Core.Functions(
   uncache,
   joinInner,
   joinInner',
+  broadcastPair
   ) where
 
 
