@@ -22,6 +22,7 @@ module Spark.Core.Context(
   computationStats,
   createSparkSessionDef,
   closeSparkSessionDef,
+  currentSessionDef,
   computationStatsDef,
   exec1Def,
   exec1Def',

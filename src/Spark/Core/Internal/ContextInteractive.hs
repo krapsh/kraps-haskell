@@ -17,7 +17,8 @@ module Spark.Core.Internal.ContextInteractive(
   exec1Def',
   closeSparkSessionDef,
   execStateDef,
-  computationStatsDef
+  computationStatsDef,
+  currentSessionDef
 ) where
 
 import qualified Data.Vector as V
@@ -118,6 +119,9 @@ closeSparkSessionDef = do
 
 computationStatsDef :: ComputationID -> IO BatchComputationResult
 computationStatsDef compId = execStateDef (computationStats compId)
+
+currentSessionDef :: IO (Maybe SparkSession)
+currentSessionDef = _currentSession
 
 _currentSession :: IO (Maybe SparkSession)
 _currentSession = readIORef _globalSessionRef
