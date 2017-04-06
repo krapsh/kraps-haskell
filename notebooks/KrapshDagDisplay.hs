@@ -230,11 +230,33 @@ _exportNodeData l = L.toStrict . L.concat $ l <&> \n ->
 _script :: (Show a) => String -> a -> T.Text
 _script elemid pbtxt =
   sformat ("<script>\
+  \function mycleanup1() {\
+    \var docs = document.getElementsByClassName(\"side tf-graph-basic\");\
+    \var n = docs.length;\
+    \for (var i=0; i < n; i++) {\
+      \var x = docs[i];\
+      \if (x.style.display === \"\") {\
+        \x.style.display = \"none\";\
+      \}\
+    \}\
+  \};\
+  \function mycleanup2() {\
+    \var docs = document.getElementsByClassName(\"main tf-graph-basic\");\
+    \var n = docs.length;\
+    \for (var i=0; i < n; i++) {\
+      \var x = docs[i];\
+      \if (x.style.left !== 0) {\
+        \x.style.left = 0;\
+      \}\
+    \}\
+  \};\
           \function load() {{\
           \  document.getElementById(\""%string%"\").pbtxt = "%string%";\
+          \  setInterval(mycleanup1, 500);\
+          \  setInterval(mycleanup2, 500);\
           \}}\
         \</script>\
-        \<link rel=\"import\" href=\"https://tensorboard.appspot.com/tf-graph-basic.build.html\" onload=load()>\
+        \<link rel=\"import\" href=\"https://tensorboard.appspot.com/tf-graph-basic.build.html\" onload=load() onscroll=scroll()>\
         \<div style=\"height:600px\">\
           \<tf-graph-basic id=\""%string%"\"></tf-graph-basic>\
         \</div>") key (show pbtxt) key where
