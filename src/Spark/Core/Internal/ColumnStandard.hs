@@ -19,4 +19,4 @@ import Spark.Core.Internal.ColumnFunctions
 import Spark.Core.Internal.TypesGenerics(buildType)
 
 asDoubleCol :: (Num a) => Column ref a -> Column ref Double
-asDoubleCol = makeColOp1 "cast_double" buildType
+asDoubleCol = makeColOp1 "double" buildType

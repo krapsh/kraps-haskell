@@ -214,12 +214,12 @@ structName (StructType fields) =
 
 {-| Builds a type that is a tuple of all the given types.
 
-Note that unlike Spark and SQL, the indexing starts from 0.
+Following the Spark and SQL convention, the indexing starts at 1.
 -}
 structTypeTuple :: N.NonEmpty DataType -> StructType
 structTypeTuple dts =
   let numFields = length dts
-      rawFieldNames = ("_" <> ) . show' <$> (0 N.:| [1..numFields])
+      rawFieldNames = ("_" <> ) . show' <$> (1 N.:| [2..numFields])
       fieldNames = N.toList $ unsafeFieldName <$> rawFieldNames
       fieldTypes = N.toList dts
       -- Unsafe call, but we know it is going to be all different fields
