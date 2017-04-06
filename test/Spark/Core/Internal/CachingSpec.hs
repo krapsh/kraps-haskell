@@ -19,12 +19,14 @@ import Spark.Core.ColumnFunctions
 import Spark.Core.Internal.Caching
 -- Required for instance resolution
 import Spark.Core.StructuresInternal()
+import Spark.Core.Internal.Client(LocalSessionId(..))
 import Spark.Core.Internal.DAGStructures
 import Spark.Core.Internal.DAGFunctions
 import Spark.Core.Internal.DatasetStructures
 import Spark.Core.Internal.Utilities
 import Spark.Core.Internal.ContextStructures
 import Spark.Core.Internal.ContextInternal
+import Spark.Core.Internal.Pruning(emptyNodeCache)
 
 data TestType = AutocacheNode | CacheNode | UncacheNode | Dataset | Row deriving (Eq, Show)
 
@@ -84,8 +86,11 @@ errors' tn = do
 intErrors :: LocalData a -> Try ComputeGraph
 intErrors ld =
   let cg = buildComputationGraph ld
-  in performGraphTransforms =<< cg
+  in performGraphTransforms emptySession =<< cg
 
+emptySession :: SparkSession
+emptySession = SparkSession c (LocalSessionId "id") 3 emptyNodeCache
+  where c = SparkSessionConf "end_point" (negate 1) 10 "session_name" True
 
 spec :: Spec
 spec = do

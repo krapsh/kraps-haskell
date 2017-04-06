@@ -10,12 +10,16 @@ import Spark.Core.Context
 import Spark.Core.Functions
 import Spark.Core.Column
 import Spark.Core.ColumnFunctions
+import Spark.Core.StructuresInternal(ComputationID(..))
 
 
 -- Collecting a dataset made from a list should yield the same list (modulo
 -- some reordering)
 collectIdempotent :: [Int] -> IO ()
 collectIdempotent l = do
+  -- stats <- computationStatsDef (ComputationID "0")
+  -- print "STATS"
+  -- print (show stats)
   let ds = dataset l
   let ds' = autocache ds
   let c1 = asCol ds'

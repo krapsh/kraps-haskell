@@ -1,7 +1,15 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE RankNTypes #-}
 
-
+-- TODO remove this file
 module Spark.Core.Internal.AlgebraStructures where
 
 -- | Algebraic structures that are common to columns and observables.
@@ -13,6 +21,7 @@ data BinaryOpFun in1 in2 to = BinaryOpFun {
   bodOp :: to -> to -> to
 }
 
+
 class HomoBinaryOp2 in1 in2 to | in1 in2 -> to where
   _liftFun :: (to -> to -> to) -> BinaryOpFun in1 in2 to
 
@@ -23,9 +32,9 @@ applyBinOp :: forall in1 in2 to. (HomoBinaryOp2 in1 in2 to) => (to -> to -> to) 
 applyBinOp f i1 i2 =
   _applyBinOp0 i1 i2 (_liftFun f)
 
--- | Overloaded operator for operationts that are guaranteed to succeed.
-(.+) :: (Num out, HomoBinaryOp2 a1 a2 out) => a1 -> a2 -> out
-(.+) = applyBinOp (+)
+-- -- | Overloaded operator for operationts that are guaranteed to succeed.
+-- (.+) :: (Num out, HomoBinaryOp2 a1 a2 out) => a1 -> a2 -> out
+-- (.+) = applyBinOp (+)
 
 (.-) :: (Num out, HomoBinaryOp2 a1 a2 out) => a1 -> a2 -> out
 (.-) = applyBinOp (-)

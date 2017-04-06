@@ -11,6 +11,8 @@ module Spark.Core.Internal.AggregationFunctions(
   collect',
   count,
   count',
+  countCol,
+  countCol',
   sumCol,
   sumCol',
   -- Developer functions
@@ -56,10 +58,17 @@ sumCol' = applyUntypedUniAgg3 _sumAgg'
 -}
 -- TODO use Long for the return data type.
 count :: forall a. Dataset a -> LocalData Int
-count ds = applyUAOUnsafe _countAgg' (asCol ds)
+count = countCol . asCol
 
 count' :: DataFrame -> LocalFrame
-count' df = applyUntypedUniAgg3 _countAgg' (asCol' df)
+count' = countCol' . asCol'
+
+countCol :: Column ref a -> LocalData Int
+countCol = applyUAOUnsafe _countAgg'
+
+countCol' :: DynColumn -> LocalFrame
+countCol' = applyUntypedUniAgg3 _countAgg'
+
 
 {-| Collects all the elements of a column into a list.
 
@@ -95,11 +104,10 @@ data UniversalAggregator a buff = UniversalAggregator {
 
 -- TODO(kps) check the coming type for non-summable types
 _sumAgg' :: DataType -> AggTry UniversalAggregatorOp
-_sumAgg' _ = pure UniversalAggregatorOp {
-    -- TODO(kps) switch to BigInt
-    uaoMergeType = StrictType IntType,
+_sumAgg' dt = pure UniversalAggregatorOp {
+    uaoMergeType = dt,
     uaoInitialOuter = InnerAggOp $ AggFunction "SUM" (V.singleton emptyFieldPath),
-    uaoMergeBuffer = ColumnSemiGroupLaw "SUM"
+    uaoMergeBuffer = ColumnSemiGroupLaw "SUM_SL"
   }
 
 _countAgg' :: DataType -> AggTry UniversalAggregatorOp

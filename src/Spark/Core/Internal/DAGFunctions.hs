@@ -26,7 +26,8 @@ module Spark.Core.Internal.DAGFunctions(
   graphMapEdges,
   reverseGraph,
   verticesAndEdges,
-  graphFilterVertices
+  graphFilterVertices,
+  pruneLexicographic
 ) where
 
 import qualified Data.Set as S
@@ -342,6 +343,36 @@ verticesAndEdges g =
         l = V.toList $ M.findWithDefault V.empty (vertexId vx) (gEdges g)
         lres = [(vertexData vx', edgeData e') | (VertexEdge vx' e') <- l]
     in (lres, n)
+
+{-| Given a list of elements with vertex/edge information and a start vertex,
+builds the graph from all the reachable vertices in the list.
+
+It returns the vertices in a DAG traversal order.
+
+Note that this function is robust and silently drops the missing vertices.
+-}
+pruneLexicographic :: VertexId -> [(VertexId, [VertexId], a)] -> [a]
+pruneLexicographic hvid l =
+  let f (vid, l', a) = (vid, (l', a))
+      allVertices = myGroupBy (f <$> l)
+      allVertices' = M.map head allVertices
+  in reverse $ _pruneLexicographic allVertices' S.empty [hvid]
+
+-- Recursive traversal of the graph, dropping everything that looks suspiscious.
+_pruneLexicographic ::
+  M.Map VertexId ([VertexId], a) ->
+  S.Set VertexId ->
+  [VertexId] ->
+  [a]
+_pruneLexicographic _ _ [] = []
+_pruneLexicographic vertices visited (hvid : t) =
+  if S.member hvid visited
+  then _pruneLexicographic vertices visited t
+  else case M.lookup hvid vertices of
+    Just (l, x) ->
+      x : _pruneLexicographic vertices (S.insert hvid visited) (l ++ t)
+    Nothing ->
+      _pruneLexicographic vertices visited t
 
 _transFilter :: (Show v, Show e) => (v -> FilterOp) -> v -> [(FilterVertex v, e)] -> FilterVertex v
 _transFilter filt vx l = traceHint ("_transFilter: vx=" <> show' vx <> " l=" <> show' l<>" res=") $

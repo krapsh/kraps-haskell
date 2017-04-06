@@ -18,6 +18,11 @@ import GHC.Generics
 
 -- Imports for the client
 
+{-| The ID of an RDD in Spark.
+-}
+data RDDId = RDDId {
+ unRDDId :: !Int
+} deriving (Eq, Show, Ord)
 
 data LocalSessionId = LocalSessionId {
   unLocalSession :: !Text
@@ -37,11 +42,32 @@ data Computation = Computation {
   cTerminalNodeIds :: ![NodeId]
 } deriving (Show, Generic)
 
+data BatchComputationKV = BatchComputationKV {
+  bckvLocalPath :: !NodePath,
+  bckvDeps :: ![NodePath],
+  bckvResult :: !PossibleNodeStatus
+} deriving (Show, Generic)
+
+data BatchComputationResult = BatchComputationResult {
+  bcrTargetLocalPath :: !NodePath,
+  bcrResults :: ![(NodePath, [NodePath], PossibleNodeStatus)]
+} deriving (Show, Generic)
+
+data RDDInfo = RDDInfo {
+ rddiId :: !RDDId,
+ rddiClassName :: !Text,
+ rddiRepr :: !Text,
+ rddiParents :: ![RDDId]
+} deriving (Show, Generic)
+
+data SparkComputationItemStats = SparkComputationItemStats {
+  scisRddInfo :: ![RDDInfo]
+} deriving (Show, Generic)
 
 data PossibleNodeStatus =
     NodeQueued
   | NodeRunning
-  | NodeFinishedSuccess NodeComputationSuccess
+  | NodeFinishedSuccess !(Maybe NodeComputationSuccess) !(Maybe SparkComputationItemStats)
   | NodeFinishedFailure NodeComputationFailure deriving (Show, Generic)
 
 data NodeComputationSuccess = NodeComputationSuccess {
@@ -61,15 +87,48 @@ data NodeComputationFailure = NodeComputationFailure {
 instance ToJSON LocalSessionId where
   toJSON = toJSON . unLocalSession
 
+instance FromJSON RDDId where
+  parseJSON x = RDDId <$> parseJSON x
+
+instance FromJSON RDDInfo where
+  parseJSON = withObject "RDDInfo" $ \o -> do
+    _id <- o .: "id"
+    className <- o .: "className"
+    repr <- o .: "repr"
+    parents <- o .: "parents"
+    return $ RDDInfo _id className repr parents
+
+instance FromJSON SparkComputationItemStats where
+  parseJSON = withObject "SparkComputationItemStats" $ \o -> do
+    rddinfo <- o .: "rddInfo"
+    return $ SparkComputationItemStats rddinfo
+
+instance FromJSON BatchComputationKV where
+  parseJSON = withObject "BatchComputationKV" $ \o -> do
+    np <- o .: "localPath"
+    deps <- o .: "pathDependencies"
+    res <- o .: "result"
+    return $ BatchComputationKV np deps res
+
+instance FromJSON BatchComputationResult where
+  parseJSON = withObject "BatchComputationResult" $ \o -> do
+    kvs <- o .: "results"
+    tlp <- o .: "targetLocalPath"
+    let f (BatchComputationKV k d v) = (k, d, v)
+    return $ BatchComputationResult tlp (f <$> kvs)
+
+instance FromJSON NodeComputationSuccess where
+  parseJSON = withObject "NodeComputationSuccess" $ \o -> NodeComputationSuccess
+    <$> o .: "content"
+    <*> o .: "type"
+
 -- Because we get a row back, we need to supply a SQLType for deserialization.
 instance FromJSON PossibleNodeStatus where
   parseJSON =
     let parseSuccess :: Object -> Parser PossibleNodeStatus
-        parseSuccess o = do
-          res <- o .: pack "finalResult"
-          x <- res .: pack "content"
-          dt <- res .: pack "type"
-          return . NodeFinishedSuccess $ NodeComputationSuccess x dt
+        parseSuccess o = NodeFinishedSuccess
+          <$> o .:? "finalResult"
+          <*> o .:? "stats"
         parseFailure :: Object -> Parser PossibleNodeStatus
         parseFailure o =
           (NodeFinishedFailure . NodeComputationFailure) <$> o .: pack "finalError"

@@ -5,11 +5,13 @@
 
 module Spark.Core.Internal.OpFunctions(
   simpleShowOp,
+  prettyShowOp,
   extraNodeOpData,
   hashUpdateNodeOp,
   prettyShowColOp,
   hdfsPath,
-  updateSourceStamp
+  updateSourceStamp,
+  prettyShowColFun
 ) where
 
 import qualified Data.Text as T
@@ -33,26 +35,36 @@ import Spark.Core.Try
 simpleShowOp :: NodeOp -> T.Text
 simpleShowOp (NodeLocalOp op) = soName op
 simpleShowOp (NodeDistributedOp op) = soName op
-simpleShowOp (NodeLocalLit _ _) = "org.spark.LocalConstant"
+simpleShowOp (NodeLocalLit _ _) = "org.spark.LocalLiteral"
 simpleShowOp (NodeOpaqueAggregator op) = soName op
-simpleShowOp (NodeAggregatorReduction uao) =
-  case uaoInitialOuter uao of
-    OpaqueAggTransform so -> soName so
-    _ -> "org.spark.StructuredReduction"
-simpleShowOp (NodeAggregatorLocalReduction ua) = _prettyShowSGO . uaoMergeBuffer $ ua
+simpleShowOp (NodeAggregatorReduction ua) =
+  _jsonShowAggTrans . uaoInitialOuter $ ua
+simpleShowOp (NodeAggregatorLocalReduction ua) = _jsonShowSGO . uaoMergeBuffer $ ua
 simpleShowOp (NodeStructuredTransform _) = "org.spark.Select"
-simpleShowOp (NodeDistributedLit _ _) = "org.spark.Constant"
+simpleShowOp (NodeDistributedLit _ _) = "org.spark.DistributedLiteral"
 simpleShowOp (NodeGroupedReduction _) = "org.spark.GroupedReduction"
 simpleShowOp (NodeReduction _) = "org.spark.Reduction"
 simpleShowOp NodeBroadcastJoin = "org.spark.BroadcastJoin"
 simpleShowOp (NodePointer _) = "org.spark.PlaceholderCache"
 
+{-| A text representation of the operation that is appealing for humans.
+-}
+prettyShowOp :: NodeOp -> T.Text
+prettyShowOp (NodeAggregatorReduction uao) =
+  case uaoInitialOuter uao of
+    OpaqueAggTransform so -> soName so
+    -- Try to have a pretty name for the simple reductions
+    InnerAggOp (AggFunction n _) -> n
+    _ -> simpleShowOp (NodeAggregatorReduction uao)
+prettyShowOp x = simpleShowOp x
+
+
 -- A human-readable string that represents column operations.
 prettyShowColOp :: ColOp -> T.Text
 prettyShowColOp (ColExtraction fpath) = T.pack (show fpath)
 prettyShowColOp (ColFunction txt cols) =
-  _prettyShowColFun txt (V.toList (prettyShowColOp <$> cols))
-prettyShowColOp (ColLit _ cell) = T.pack (show cell)
+  prettyShowColFun txt (V.toList (prettyShowColOp <$> cols))
+prettyShowColOp (ColLit _ cell) = show' cell
 prettyShowColOp (ColStruct s) =
   "struct(" <> T.intercalate "," (prettyShowColOp . tfValue <$> V.toList s) <> ")"
 
@@ -86,10 +98,20 @@ updateSourceStamp (NodeDistributedOp so) (DataInputStamp dis) | soName so == "or
 updateSourceStamp x _ =
   tryError $ "updateSourceStamp: Expected NodeDistributedOp, got " <> show' x
 
+_jsonShowAggTrans :: AggTransform -> Text
+_jsonShowAggTrans (OpaqueAggTransform op) = soName op
+_jsonShowAggTrans (InnerAggOp _) = "org.spark.StructuredReduction"
+
+
+_jsonShowSGO :: SemiGroupOperator -> Text
+_jsonShowSGO (OpaqueSemiGroupLaw so) = soName so
+_jsonShowSGO (UdafSemiGroupOperator ucn) = ucn
+_jsonShowSGO (ColumnSemiGroupLaw sfn) = sfn
+
 
 _prettyShowAggOp :: AggOp -> T.Text
 _prettyShowAggOp (AggUdaf _ ucn fp) = ucn <> "(" <> show' fp <> ")"
-_prettyShowAggOp (AggFunction sfn v) = _prettyShowColFun sfn r where
+_prettyShowAggOp (AggFunction sfn v) = prettyShowColFun sfn r where
   r = V.toList (show' <$> v)
 _prettyShowAggOp (AggStruct v) =
   "struct(" <> T.intercalate "," (_prettyShowAggOp . afValue <$> V.toList v) <> ")"
@@ -148,15 +170,15 @@ hashUpdateNodeOp ctx op = _hashUpdateJson ctx $ A.object [
   "extra" .= extraNodeOpData op]
 
 
-_prettyShowColFun :: T.Text -> [Text] -> T.Text
-_prettyShowColFun txt [col] | _isSym txt =
-  T.concat [txt, col]
-_prettyShowColFun txt [col1, col2] | _isSym txt =
+prettyShowColFun :: T.Text -> [Text] -> T.Text
+prettyShowColFun txt [col] | _isSym txt =
+  T.concat [txt, " ", col]
+prettyShowColFun txt [col1, col2] | _isSym txt =
   -- This is not perfect for complex operations, but it should get the job done
   -- for now.
   -- TODO eventually use operator priority here
-  T.concat [col1, txt, col2]
-_prettyShowColFun txt cols =
+  T.concat [col1, " ", txt, " ", col2]
+prettyShowColFun txt cols =
   let vals = T.intercalate ", " cols in
   T.concat [txt, "(", vals, ")"]
 

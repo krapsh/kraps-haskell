@@ -58,6 +58,9 @@ type GenericType = DataType
 instance SQLTypeable Int where
   _genericTypeFromValue _ = StrictType IntType
 
+instance SQLTypeable Double where
+  _genericTypeFromValue _ = StrictType DoubleType
+
 instance SQLTypeable T.Text where
   _genericTypeFromValue _ = StrictType StringType
 

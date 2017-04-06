@@ -7,6 +7,7 @@ module Spark.Core.IntegrationUtilities where
 
 import GHC.Generics (Generic)
 import Data.Text(Text)
+import Data.Aeson(ToJSON)
 
 import Spark.Core.Context
 import Spark.Core.Types
@@ -55,6 +56,7 @@ data TestStruct7 = TestStruct7 {
 } deriving (Show, Eq, Generic)
 instance ToSQL TestStruct7
 instance SQLTypeable TestStruct7
+instance ToJSON TestStruct7
 
 newtype TestT1 = TestT1 {
   unTestT1 :: Int

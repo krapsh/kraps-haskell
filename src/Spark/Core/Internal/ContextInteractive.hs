@@ -16,7 +16,9 @@ module Spark.Core.Internal.ContextInteractive(
   exec1Def,
   exec1Def',
   closeSparkSessionDef,
-  execStateDef
+  execStateDef,
+  computationStatsDef,
+  currentSessionDef
 ) where
 
 import qualified Data.Vector as V
@@ -30,6 +32,7 @@ import System.IO.Unsafe(unsafePerformIO)
 import Control.Monad.Logger(runStdoutLoggingT)
 
 
+import Spark.Core.Internal.Client(BatchComputationResult)
 import Spark.Core.Internal.ContextStructures
 import Spark.Core.Internal.DatasetStructures
 import Spark.Core.Internal.DatasetFunctions(untypedLocalData)
@@ -113,6 +116,12 @@ closeSparkSessionDef :: IO ()
 closeSparkSessionDef = do
   _ <- _removeSession
   return ()
+
+computationStatsDef :: ComputationID -> IO BatchComputationResult
+computationStatsDef compId = execStateDef (computationStats compId)
+
+currentSessionDef :: IO (Maybe SparkSession)
+currentSessionDef = _currentSession
 
 _currentSession :: IO (Maybe SparkSession)
 _currentSession = readIORef _globalSessionRef

@@ -26,8 +26,12 @@ library
                        Spark.Core.ColumnFunctions,
                        Spark.Core.Dataset,
                        Spark.Core.Functions,
+                       Spark.Core.Internal.Arithmetics,
+                       Spark.Core.Internal.ArithmeticsImpl,
                        Spark.Core.Internal.Caching,
                        Spark.Core.Internal.CanRename,
+                       Spark.Core.Internal.Client,
+                       Spark.Core.Internal.ColumnStandard,
                        Spark.Core.Internal.ComputeDag,
                        Spark.Core.Internal.ContextInternal,
                        Spark.Core.Internal.ContextIOInternal,
@@ -39,6 +43,7 @@ library
                        Spark.Core.Internal.Groups,
                        Spark.Core.Internal.Joins,
                        Spark.Core.Internal.LocalDataFunctions,
+                       Spark.Core.Internal.ObservableStandard,
                        Spark.Core.Internal.OpFunctions,
                        Spark.Core.Internal.OpStructures,
                        Spark.Core.Internal.Paths,
@@ -61,7 +66,6 @@ library
                        Spark.Core.Internal.AlgebraStructures,
                        Spark.Core.Internal.ColumnStructures,
                        Spark.Core.Internal.ContextInteractive,
-                       Spark.Core.Internal.Client,
                        Spark.Core.Internal.AggregationFunctions,
                        Spark.Core.Internal.FunctionsInternals,
                        Spark.Core.Internal.LocatedBase,
@@ -89,6 +93,7 @@ library
                        QuickCheck,
                        random,
                        scientific,
+                       semigroups,
                        SHA,
                        mtl,
                        text,
@@ -127,12 +132,12 @@ test-suite krapsh-test
                      , containers
                      , formatting
                      , krapsh
-                     , hspec == 2.*
+                     , hspec >= 2.0 && < 2.3
                      , text
                      , raw-strings-qq
                      , QuickCheck
                      , vector
-  ghc-options:         -fhpc -O0 -Wall
+  ghc-options:         -fhpc -O0 -Wall -prof
 --  ghc-options:         -ddump-deriv -O0 -rtsopts=all -prof -auto-all
   default-language:    Haskell2010
 
@@ -142,6 +147,7 @@ test-suite krapsh-test-integration
   main-is:             Spec.hs
   other-modules:       Spark.Core.CachingSpec,
                        Spark.Core.CollectSpec,
+                       Spark.Core.ColumnSpec,
                        Spark.Core.GroupsSpec,
                        Spark.Core.IntegrationUtilities,
                        Spark.Core.JoinsSpec,

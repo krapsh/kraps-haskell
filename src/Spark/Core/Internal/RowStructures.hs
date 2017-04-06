@@ -15,6 +15,7 @@ import qualified Data.Text as T
 data Cell =
     Empty -- To represent maybe
     | IntElement !Int
+    | DoubleElement !Double
     | StringElement !T.Text
     | BoolElement !Bool
     | RowArray !(Vector Cell) deriving (Show, Eq)
@@ -38,6 +39,7 @@ data Row = Row {
 -- | Cell
 instance ToJSON Cell where
   toJSON Empty = Null
+  toJSON (DoubleElement d) = toJSON d
   toJSON (IntElement i) = toJSON i
   toJSON (BoolElement b) = toJSON b
   toJSON (StringElement s) = toJSON s

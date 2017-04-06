@@ -18,6 +18,7 @@ module Spark.Core.Internal.Utilities(
   forceRight,
   show',
   encodeDeterministicPretty,
+  withContext,
   strictList,
   traceHint,
   SF.sh,
@@ -65,12 +66,14 @@ encodeDeterministicPretty =
   encodePretty' (defConfig { confIndent = Spaces 0, confCompare = compare })
 
 -- | group by
+-- TODO: have a non-empty list instead
 myGroupBy' :: (Ord b) => (a -> b) -> [a] -> [(b, [a])]
 myGroupBy' f = map (f . head &&& id)
                    . groupBy ((==) `on` f)
                    . sortBy (compare `on` f)
 
 -- | group by
+-- TODO: have a non-empty list instead
 myGroupBy :: (Ord a) => [(a, b)] -> M.Map a [b]
 myGroupBy l = let
   l2 = myGroupBy' fst l in
@@ -116,3 +119,7 @@ traceHint hint x = trace (T.unpack hint ++ show x) x
 -- | show with Text
 show' :: (Show a) => a -> Text
 show' x = T.pack (show x)
+
+withContext :: Text -> Either Text a -> Either Text a
+withContext _ (Right x) = Right x
+withContext msg (Left other) = Left (msg <> "\n>>" <> other)

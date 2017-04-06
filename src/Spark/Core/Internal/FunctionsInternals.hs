@@ -21,11 +21,18 @@ module Spark.Core.Internal.FunctionsInternals(
   struct',
   struct,
   -- Developer tools
-  checkOrigin
+  checkOrigin,
+  projectColFunction,
+  projectColFunction',
+  projectColFunction2',
+  colOpNoBroadcast
 ) where
 
 import Control.Arrow
+import Data.Aeson(toJSON)
 import qualified Data.Vector as V
+import qualified Data.Map.Strict as M
+import qualified Data.List.NonEmpty as N
 import qualified Data.Text as T
 import Formatting
 
@@ -35,8 +42,11 @@ import Spark.Core.Internal.DatasetFunctions
 import Spark.Core.Internal.DatasetStructures
 import Spark.Core.Internal.Utilities
 import Spark.Core.Internal.TypesFunctions
+import Spark.Core.Internal.LocalDataFunctions
 import Spark.Core.Internal.TypesStructures
+import Spark.Core.Internal.Projections
 import Spark.Core.Internal.OpStructures
+import Spark.Core.Internal.TypesGenerics(SQLTypeable, buildType)
 import Spark.Core.StructuresInternal
 import Spark.Core.Try
 
@@ -106,9 +116,7 @@ asCol' = ((iUntypedColData . asCol) <$>)
 
 -- | Packs a single column into a dataframe.
 pack1 :: Column ref a -> Dataset a
-pack1 c =
-  emptyDataset (NodeStructuredTransform (colOp c)) (colType c)
-      `parents` [untyped (colOrigin c)]
+pack1 = _pack1
 
 {-| Packs a number of columns into a single dataframe.
 
@@ -153,6 +161,73 @@ struct = _staticPackAsColumn2
 
 checkOrigin :: [DynColumn] -> Try [UntypedColumnData]
 checkOrigin x = _checkOrigin =<< sequence x
+
+{-| Takes a typed function that operates on columns and projects this function
+onto a similar operation for type observables.
+
+This function is not very smart and may throw an error for complex cases such
+as broadcasting, joins, etc.
+-}
+-- TODO: we do not need technically the typeable constraint.
+-- It is an additional check.
+projectColFunction :: forall x y.
+  (HasCallStack, SQLTypeable y, SQLTypeable x) =>
+  (forall ref. Column ref x -> Column ref y) -> LocalData x -> LocalData y
+projectColFunction f o =
+  let o' = untypedLocalData o
+      sqltx = buildType :: SQLType x
+      sqlty = buildType :: SQLType y
+      f' :: UntypedColumnData -> Try UntypedColumnData
+      f' x = dropColType . f <$> castTypeCol sqltx x
+      o2 = projectColFunctionUntyped (f' =<<) o'
+      o3 = castType sqlty =<< o2
+  in forceRight o3
+
+projectColFunctionUntyped ::
+  (DynColumn -> DynColumn) -> UntypedLocalData -> LocalFrame
+projectColFunctionUntyped f obs = do
+  -- Create a placeholder dataset and a corresponding column.
+  let dt = unSQLType (nodeType obs)
+  -- Pass them to the function.
+  let no = NodeDistributedLit dt V.empty
+  let ds = emptyDataset no (SQLType dt)
+  let c = asCol ds
+  colRes <- f (pure (dropColType c))
+  let dtOut = unSQLType $ colType colRes
+  -- This will fail if there is a broadcast.
+  co <- _replaceObservables M.empty (colOp colRes)
+  let op = NodeStructuredTransform co
+  return $ emptyLocalData op (SQLType dtOut)
+              `parents` [untyped obs]
+
+{-| Takes a function that operates on columns, and projects this
+function onto the same operations for observables.
+
+This is not very smart at the moment and will miss the more
+complex operations such as broadcasting, etc.
+-}
+-- TODO: use for the numerical transforms instead of special stuff.
+projectColFunction' ::
+    (DynColumn -> DynColumn) ->
+    LocalFrame -> LocalFrame
+projectColFunction' f obs = projectColFunctionUntyped f =<< obs
+
+projectColFunction2' ::
+  (DynColumn -> DynColumn -> DynColumn) ->
+  LocalFrame ->
+  LocalFrame ->
+  LocalFrame
+projectColFunction2' f o1' o2' = do
+  let f2 :: DynColumn -> DynColumn
+      f2 dc = f (dc /- "_1") (dc /- "_2")
+  o1 <- o1'
+  o2 <- o2'
+  let o = iPackTupleObs $ o1 N.:| [o2]
+  projectColFunctionUntyped f2 o
+
+colOpNoBroadcast :: GeneralizedColOp -> Try ColOp
+colOpNoBroadcast = _replaceObservables M.empty
+
 
 _checkOrigin :: [UntypedColumnData] -> Try [UntypedColumnData]
 _checkOrigin [] = pure []
@@ -210,6 +285,8 @@ instance forall ref b a1 a2 a3 z1 z2 z3. (
         names = tupleFieldNames :: NameTuple b
       in _unsafeBuildStruct [x1, x2, x3] names
 
+
+
 _unsafeBuildStruct :: [UntypedColumnData] -> NameTuple x -> Column ref x
 _unsafeBuildStruct cols (NameTuple names) =
   if length cols /= length names
@@ -220,10 +297,13 @@ _unsafeBuildStruct cols (NameTuple names) =
           z = forceRight uc
       in z { _cOp = _cOp z }
 
+_buildTuple :: [UntypedColumnData] -> Try UntypedColumnData
+_buildTuple l = _buildStruct (zip names l) where
+  names = (:[]) . unsafeFieldName . ("_" <> ) . show' $ [0..(length l)]
 
 _buildStruct :: [(FieldName, UntypedColumnData)] -> Try UntypedColumnData
 _buildStruct cols = do
-  let fields = ColStruct $ (uncurry TransformField . (fst &&& colOp . snd)) <$> V.fromList cols
+  let fields = GenColStruct $ (uncurry GeneralizedTransField . (fst &&& colOp . snd)) <$> V.fromList cols
   st <- structTypeFromFields $ (fst &&& unSQLType . colType . snd) <$> cols
   let name = structName st
   case _columnOrigin (snd <$> cols) of
@@ -234,10 +314,70 @@ _buildStruct cols = do
                   _cOp = fields,
                   _cReferingPath = Just $ unsafeFieldName name
                 }
-    l -> tryError $ sformat ("Too many distinct origins: "%sh) l
+    l -> tryError $ sformat ("_buildStruct: Too many distinct origins: "%sh) l
 
 _columnOrigin :: [UntypedColumnData] -> [UntypedDataset]
 _columnOrigin l =
   let
     groups = myGroupBy' (nodeId . colOrigin) l
   in (colOrigin . head . snd) <$> groups
+
+-- The packing algorithm
+-- It eliminates the broadcast variables into joins and then wraps the
+-- remaining transform into structured transform.
+-- TODO: the data structure and the algorithms use unsafe operations
+-- It should be transfromed to safe operations eventually.
+_pack1 :: (HasCallStack) => Column ref a -> Dataset a
+_pack1 ucd =
+  let gco = colOp ucd
+      ulds = _collectObs gco
+  in case ulds of
+    [] -> let co = forceRight $ colOpNoBroadcast gco in
+       _packCol1 ucd co
+    (h : t) -> forceRight $ _packCol1WithObs ucd (h N.:| t)
+
+_packCol1WithObs :: Column ref a -> N.NonEmpty UntypedLocalData -> Try (Dataset a)
+_packCol1WithObs c ulds = do
+  let packedObs = iPackTupleObs ulds
+  -- Retrieve the field names in the pack structure.
+  let st = structTypeTuple (unSQLType . nodeType <$> ulds)
+  let names = V.toList $ structFieldName <$> structFields st
+  let paths = FieldPath . V.fromList . (unsafeFieldName "_2" : ) . (:[]) <$> names
+  let m = M.fromList ((nodeId <$> N.toList ulds) `zip` paths)
+  let joined = broadcastPair (colOrigin c) packedObs
+  co <- _replaceObservables m (colOp c)
+  let no = NodeStructuredTransform co
+  let f = emptyDataset no (colType c) `parents` [untyped joined]
+  return f
+
+
+_replaceObservables :: M.Map NodeId FieldPath -> GeneralizedColOp -> Try ColOp
+-- Special case for when there is nothing in the dictionary
+_replaceObservables m (GenColExtraction fp) | M.null m = pure $ ColExtraction fp
+_replaceObservables _ (GenColExtraction (FieldPath v)) =
+  -- It is a normal extraction, prepend the suffix of the data structure.
+  pure (ColExtraction (FieldPath v')) where
+    v' = V.cons (unsafeFieldName "_1") v
+_replaceObservables _ (GenColLit dt c) = pure (ColLit dt (toJSON c))
+_replaceObservables m (GenColFunction n v) =
+  ColFunction n <$> sequence (_replaceObservables m <$> v)
+_replaceObservables m (GenColStruct v) = ColStruct <$> sequence (_replaceField m <$> v)
+_replaceObservables m (BroadcastColOp uld) =
+   case M.lookup (nodeId uld) m of
+     Just p -> pure $ ColExtraction p
+     Nothing -> tryError $ "_replaceObservables: error: missing key " <> show' uld <> " in " <> show' m
+
+_replaceField :: M.Map NodeId FieldPath -> GeneralizedTransField -> Try TransformField
+_replaceField m (GeneralizedTransField n v) = TransformField n <$> _replaceObservables m v
+
+-- Unconditionally packs the column into a dataset.
+_packCol1 :: Column ref a -> ColOp -> Dataset a
+_packCol1 c op =
+  emptyDataset (NodeStructuredTransform op) (colType c)
+      `parents` [untyped (colOrigin c)]
+
+_collectObs :: GeneralizedColOp -> [UntypedLocalData]
+_collectObs (GenColFunction _ v) = concat (_collectObs <$> V.toList v)
+_collectObs (BroadcastColOp uld) = [uld]
+_collectObs (GenColStruct v) = concat (_collectObs . gtfValue <$> V.toList v)
+_collectObs _ = [] -- Anything else has no broadcast info.

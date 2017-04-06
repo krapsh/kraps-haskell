@@ -12,8 +12,6 @@ import Spark.Core.Row
 import Spark.Core.Functions
 
 
--- Collecting a dataset made from a list should yield the same list (modulo
--- some reordering)
 smallSum :: (Eq a, Show a, SQLTypeable a, ToSQL a, FromSQL a, Num a) => a -> a -> IO ()
 smallSum x y = do
   let x' = constant x

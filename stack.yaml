@@ -8,3 +8,6 @@ extra-deps:
 - aeson-pretty-0.8.2
 resolver: lts-7.13
 pvp-bounds: both
+build:
+  library-profiling: true
+  executable-profiling: true

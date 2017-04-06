@@ -16,6 +16,8 @@ module Spark.Core.Internal.TypesFunctions(
   structField,
   structType,
   structTypeFromFields,
+  structTypeTuple,
+  structTypeTuple',
   tupleType,
   structName,
   iSingleField,
@@ -23,6 +25,7 @@ module Spark.Core.Internal.TypesFunctions(
 ) where
 
 import Control.Monad.Except
+import qualified Data.List.NonEmpty as N
 import Control.Arrow(second)
 import Data.Function(on)
 import Data.List(sort, nub, sortBy)
@@ -58,7 +61,6 @@ columnType (SQLType dt) = dt
 isNullable :: DataType -> Bool
 isNullable (StrictType _) = False
 isNullable (NullableType _) = True
-
 
 -- *** Creation of data types ***
 
@@ -158,6 +160,7 @@ _decodeLeafStrict dtr l =
 
 _compatibleTypesStrict :: StrictDataType -> StrictDataType -> Bool
 _compatibleTypesStrict IntType IntType = True
+_compatibleTypesStrict DoubleType DoubleType = True
 _compatibleTypesStrict StringType StringType = True
 _compatibleTypesStrict (ArrayType et) (ArrayType et') = compatibleTypes et et'
 _compatibleTypesStrict (Struct (StructType v)) (Struct (StructType v')) =
@@ -208,6 +211,26 @@ iSingleField _ = Nothing
 structName :: StructType -> Text
 structName (StructType fields) =
   "struct(" <> intercalate "," (unFieldName . structFieldName <$> V.toList fields) <> ")"
+
+{-| Builds a type that is a tuple of all the given types.
+
+Note that unlike Spark and SQL, the indexing starts from 0.
+-}
+structTypeTuple :: N.NonEmpty DataType -> StructType
+structTypeTuple dts =
+  let numFields = length dts
+      rawFieldNames = ("_" <> ) . show' <$> (0 N.:| [1..numFields])
+      fieldNames = N.toList $ unsafeFieldName <$> rawFieldNames
+      fieldTypes = N.toList dts
+      -- Unsafe call, but we know it is going to be all different fields
+  in forceRight $ structTypeFromFields (zip fieldNames fieldTypes)
+
+{-| Returns a data type instead (the most common use case)
+
+Note that unlike Spark and SQL, the indexing starts from 0.
+ -}
+structTypeTuple' :: N.NonEmpty DataType -> DataType
+structTypeTuple' = StrictType . Struct . structTypeTuple
 
 structTypeFromFields :: [(FieldName, DataType)] -> Try StructType
 structTypeFromFields [] = tryError "You cannot build an empty structure"

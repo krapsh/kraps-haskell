@@ -59,6 +59,9 @@ instance (ToSQL a, ToSQL b) => ToSQL (a, b) where
 instance ToSQL Int where
   _valueToCell = IntElement
 
+instance ToSQL Double where
+  _valueToCell = DoubleElement
+
 instance ToSQL Text where
   _valueToCell = StringElement
 

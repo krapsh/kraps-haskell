@@ -39,7 +39,9 @@ module Spark.Core.Internal.DatasetFunctions(
   untypedLocalData,
   updateNode,
   updateNodeOp,
+  broadcastPair,
   -- Developer conversions
+  -- TODO: remove all that
   fun1ToOpTyped,
   fun2ToOpTyped,
   nodeOpToFun1,
@@ -407,6 +409,17 @@ nodeOpToFun2Untyped dt no node1 node2 =
   in n2 `parents` [untyped node1, untyped node2]
 
 
+{-| Low-level operator that takes an observable and propagates it along the
+content of an existing dataset.
+
+Users are advised to use the Column-based `broadcast` function instead.
+-}
+broadcastPair :: Dataset a -> LocalData b -> Dataset (a, b)
+broadcastPair ds ld = n `parents` [untyped ds, untyped ld]
+  where n = emptyNodeStandard (nodeLocality ds) sqlt name
+        sqlt = tupleType (nodeType ds) (nodeType ld)
+        name = "org.spark.BroadcastPair"
+
 -- ******* INSTANCES *********
 
 -- Put here because it depends on some private functions.
@@ -418,7 +431,7 @@ instance forall loc a. Show (ComputeNode loc a) where
       TypedLocality Local -> "!"
       TypedLocality Distributed -> ":"
     nn = unNodeName . nodeName $ ld
-    no = simpleShowOp . nodeOp $ ld
+    no = prettyShowOp . nodeOp $ ld
     fields = T.pack . show . nodeType $ ld in
       T.unpack $ toStrict $ TF.format txt (nn, no, loc, fields)
 
@@ -451,7 +464,7 @@ castType sqlt n = do
   if dt `compatibleTypes` dt'
     then let n' = updateNode n (\node -> node { _cnType = dt }) in
       pure (_unsafeCastNode n')
-    else tryError $ sformat ("Casting error: dataframe has type "%sh%" incompatible with type "%sh) dt' dt
+    else tryError $ sformat ("castType: Casting error: dataframe has type "%sh%" incompatible with type "%sh) dt' dt
 
 castType' :: SQLType a -> Try (ComputeNode loc Cell) -> Try (ComputeNode loc a)
 castType' sqlt df = df >>= castType sqlt
@@ -513,7 +526,7 @@ _nodeId node =
 
 _defaultNodeName :: ComputeNode loc a -> NodeName
 _defaultNodeName node =
-  let opName = (simpleShowOp . nodeOp) node
+  let opName = (prettyShowOp . nodeOp) node
       namePieces = T.splitOn (T.pack ".") opName
       lastOpt = (listToMaybe . reverse) namePieces
       l = fromMaybe (T.pack "???") lastOpt

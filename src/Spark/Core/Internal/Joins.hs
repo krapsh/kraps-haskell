@@ -75,6 +75,7 @@ The resulting dataframe has 2 columns:
 
  Note: this is a low-level operation. Users may want to use broadcastObs instead.
 -}
+-- TODO: what is the difference with broadcastPair???
 joinObs' :: DynColumn -> LocalFrame -> DataFrame
 joinObs' dc lf = do
   let df = pack' dc
@@ -84,11 +85,6 @@ joinObs' dc lf = do
   st <- structTypeFromFields [(unsafeFieldName "values", unSQLType (colType c)), (unsafeFieldName "broadcast", unSQLType (nodeType o))]
   let sqlt = SQLType (StrictType (Struct st))
   return $ emptyDataset NodeBroadcastJoin sqlt `parents` [untyped dc', untyped o]
-
--- {-| Broadcasts an observable along the axis of a dataset.
--- -}
--- broadcastObs :: ColumnReference ref -> LocalData val -> Column ref val
--- broadcastObs = missing "broadcastObs"
 
 _joinTypeInner :: DynColumn -> DynColumn -> DynColumn -> Try DataType
 _joinTypeInner kcol col1 col2 = do

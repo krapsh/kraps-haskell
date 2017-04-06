@@ -13,6 +13,7 @@ import Spark.Core.Row
 import Spark.Core.Functions
 import Spark.Core.Column
 import Spark.Core.IntegrationUtilities
+import Spark.Core.Internal.Utilities
 
 
 -- Collecting a dataset made from a list should yield the same list (modulo
@@ -38,7 +39,8 @@ spec = do
   describe "Integration test - collect on ints" $ do
     run "running_twice" $ do
       let ds = dataset [1::Int,2]
-      l2 <- exec1Def $ collect (asCol ds)
+      let c = traceHint "c=" $ collect (asCol ds)
+      l2 <- exec1Def $ c
       l2' <- exec1Def $ collect (asCol ds)
       l2 `shouldBe` l2'
     run "empty_ints1" $
