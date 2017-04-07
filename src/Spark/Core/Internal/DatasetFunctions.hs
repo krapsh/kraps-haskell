@@ -8,7 +8,9 @@
 module Spark.Core.Internal.DatasetFunctions(
   parents,
   untyped,
+  untyped',
   logicalParents,
+  logicalParents',
   depends,
   dataframe,
   asDF,
@@ -233,6 +235,10 @@ asObservable = _asTyped
 untyped :: ComputeNode loc a -> UntypedNode
 untyped = _unsafeCastNode
 
+untyped' :: Try (ComputeNode loc a) -> UntypedNode'
+untyped' = fmap untyped
+
+
 untypedDataset :: ComputeNode LocDistributed a -> UntypedDataset
 untypedDataset = _unsafeCastNode
 
@@ -269,6 +275,12 @@ only be reported during analysis.
 logicalParents :: ComputeNode loc a -> [UntypedNode] -> ComputeNode loc a
 logicalParents node l = updateNode node $ \n ->
   n { _cnLogicalParents = pure . V.fromList $ l }
+
+logicalParents' :: Try (ComputeNode loc a) -> [UntypedNode'] -> Try (ComputeNode loc a)
+logicalParents' n' l' = do
+  n <- n'
+  l <- sequence l'
+  return (logicalParents n l)
 
 {-| Sets the logical dependencies on this node.
 
