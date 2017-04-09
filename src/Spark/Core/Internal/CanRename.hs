@@ -78,3 +78,7 @@ instance forall loc a s. (s ~ String) => CanRename (ComputeNode loc a) s where
   -- harder to figure out what is happening.
   (@@) cn name = cn { _cnName = Just nn } where
     nn = NodeName . T.pack $ name
+
+instance forall loc a s. (s ~ String) => CanRename (Try (ComputeNode loc a)) s where
+  (Right n) @@ str = Right (n @@ str)
+  (Left n) @@ _ = Left n

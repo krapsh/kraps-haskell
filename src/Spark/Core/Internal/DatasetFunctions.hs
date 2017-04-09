@@ -8,7 +8,9 @@
 module Spark.Core.Internal.DatasetFunctions(
   parents,
   untyped,
+  untyped',
   logicalParents,
+  logicalParents',
   depends,
   dataframe,
   asDF,
@@ -233,6 +235,10 @@ asObservable = _asTyped
 untyped :: ComputeNode loc a -> UntypedNode
 untyped = _unsafeCastNode
 
+untyped' :: Try (ComputeNode loc a) -> UntypedNode'
+untyped' = fmap untyped
+
+
 untypedDataset :: ComputeNode LocDistributed a -> UntypedDataset
 untypedDataset = _unsafeCastNode
 
@@ -269,6 +275,12 @@ only be reported during analysis.
 logicalParents :: ComputeNode loc a -> [UntypedNode] -> ComputeNode loc a
 logicalParents node l = updateNode node $ \n ->
   n { _cnLogicalParents = pure . V.fromList $ l }
+
+logicalParents' :: Try (ComputeNode loc a) -> [UntypedNode'] -> Try (ComputeNode loc a)
+logicalParents' n' l' = do
+  n <- n'
+  l <- sequence l'
+  return (logicalParents n l)
 
 {-| Sets the logical dependencies on this node.
 
@@ -430,19 +442,19 @@ instance forall loc a. Show (ComputeNode loc a) where
     loc = case nodeLocality ld of
       TypedLocality Local -> "!"
       TypedLocality Distributed -> ":"
-    nn = unNodeName . nodeName $ ld
+    np = prettyNodePath . nodePath $ ld
     no = prettyShowOp . nodeOp $ ld
     fields = T.pack . show . nodeType $ ld in
-      T.unpack $ toStrict $ TF.format txt (nn, no, loc, fields)
+      T.unpack $ toStrict $ TF.format txt (np, no, loc, fields)
 
 instance forall loc a. A.ToJSON (ComputeNode loc a) where
   toJSON node = A.object [
     "locality" .= nodeLocality node,
-    "name" .= nodeName node,
+    "path" .= nodePath node,
     "op" .= (simpleShowOp . nodeOp $ node),
     "extra" .= (extraNodeOpData . nodeOp $ node),
-    "parents" .= (nodeName <$> nodeParents node),
-    "logicalDependencies" .= (nodeName <$> nodeLogicalDependencies node),
+    "parents" .= (nodePath <$> nodeParents node),
+    "logicalDependencies" .= (nodePath <$> nodeLogicalDependencies node),
     "_type" .= (unSQLType . nodeType) node]
 
 instance forall loc. A.ToJSON (TypedLocality loc) where

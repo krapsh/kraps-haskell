@@ -14,6 +14,7 @@ import qualified Data.Set as S
 import qualified Data.ByteString.Char8 as C8
 import Data.Maybe(mapMaybe, catMaybes)
 import Data.Hashable
+import IHaskell.Display
 import Formatting
 import Control.Arrow((&&&))
 
@@ -21,6 +22,7 @@ import Spark.Core.Internal.DAGStructures
 import Spark.Core.Internal.DAGFunctions
 import Spark.Core.Internal.Utilities
 import Spark.Core.Internal.Client
+import Spark.Core.Internal.ContextInteractive(computationStatsDef)
 import Spark.Core.Internal.DatasetStructures
 import Spark.Core.Internal.DatasetFunctions
 import Spark.Core.Internal.OpFunctions
@@ -29,7 +31,6 @@ import Spark.Core.Internal.ContextStructures
 import Spark.Core.Internal.ComputeDag
 import Spark.Core.Internal.ContextInternal
 import Spark.Core.StructuresInternal
-import Spark.Core.Internal.DAGFunctions(pruneLexicographic)
 import Spark.Core.Try
 
 
@@ -272,3 +273,10 @@ tfIFrame ns =
   , _script (show h) txt
   , "'></iframe>"
   ]
+
+-- | A small function to display the RDD content of a node.
+displayRDD cid = do
+    stats <- computationStatsDef (ComputationID cid)
+    let ns = statsToExportNodes stats
+    let c = T.unpack (tfIFrame ns)
+    return $ Display [html c]

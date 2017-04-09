@@ -185,4 +185,4 @@ spec = do
       let c = count ds @@ "c"
       let c2 = (c + (identity c @@ "id")) `logicalParents` [untyped ds] @@ "c2"
       let withParents = T.unpack . catNodePath . nodePath <$> assignPaths (untyped c2)
-      withParents `shouldBe`  ["ds","c2/select_2e82fc","c2/c","c2/id","c2"]
+      withParents `shouldBe`  ["ds", "c2/c","c2/id","c2"]

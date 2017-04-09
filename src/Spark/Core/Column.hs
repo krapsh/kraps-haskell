@@ -34,7 +34,8 @@ module Spark.Core.Column(
   colType,
   untypedCol,
   colFromObs,
-  colFromObs'
+  colFromObs',
+  applyCol1,
   ) where
 
 import Spark.Core.Internal.ColumnStructures

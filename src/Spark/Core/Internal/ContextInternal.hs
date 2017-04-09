@@ -193,10 +193,10 @@ getTargetNodes comp =
       err -> failure $ sformat ("_getNodes:fun2: err="%shown%" n="%shown) err n
     finalNodeNames = cTerminalNodes comp
     dct = M.fromList $ (nodePath &&& id) <$> cNodes comp
-    untyped' = finalNodeNames <&> \n ->
+    untyped2 = finalNodeNames <&> \n ->
       let err = failure $ sformat ("Could not find "%sh%" in "%sh) n dct
       in M.findWithDefault err n dct
-  in fun2 <$> untyped'
+  in fun2 <$> untyped2
 
 {-| Retrieves all the observables from a computation.
 -}

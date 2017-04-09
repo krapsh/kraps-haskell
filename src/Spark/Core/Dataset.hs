@@ -29,8 +29,10 @@ module Spark.Core.Dataset(
   -- * Relations
   parents,
   untyped,
+  untyped',
   depends,
   logicalParents,
+  logicalParents',
   -- * Attributes
   nodeLogicalParents,
   nodeLogicalDependencies,

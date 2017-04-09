@@ -127,7 +127,7 @@ natural to generalize datasets to contain cells.
 When communicating with Spark, though, single cells are wrapped
 into rows with single field, as Spark does.
 -}
-type DataFrame = Try (Dataset Cell)
+type DataFrame = Try UntypedDataset
 
 {-| Observable, whose type can only be infered at runtime and
 that can fail to be computed at runtime.
@@ -141,7 +141,9 @@ the Spark computation graph.
 
 TODO(kps) rename to DynObservable
 -}
-type LocalFrame = Try (LocalData Cell)
+type LocalFrame = Try UntypedLocalData
+
+type UntypedNode' = Try UntypedNode
 
 {-| The different paths of edges in the compute DAG of nodes, at the
 start of computations.
