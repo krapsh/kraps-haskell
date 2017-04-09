@@ -42,6 +42,8 @@ import Spark.Core.Dataset
 import Spark.Core.Internal.Client
 import Spark.Core.Internal.ContextInternal
 import Spark.Core.Internal.ContextStructures
+import Spark.Core.Internal.DAGStructures
+import Spark.Core.Internal.ComputeDag
 import Spark.Core.Internal.DatasetFunctions(untypedLocalData, nodePath)
 import Spark.Core.Internal.DatasetStructures(UntypedLocalData)
 import Spark.Core.Internal.OpStructures(DataInputStamp(..))
@@ -96,14 +98,15 @@ executeCommand1 ld = do
 -- The main function to launch computations.
 executeCommand1' :: UntypedLocalData -> SparkState (Try Cell)
 executeCommand1' ld = do
-  logDebugN $ "executeCommand1: computing observable " <> show' ld
+  logDebugN $ "executeCommand1': computing observable " <> show' ld
   -- Retrieve the computation graph
   let cgt = buildComputationGraph ld
   _ret cgt $ \cg -> do
     cgWithSourceT <- updateSourceInfo cg
     _ret cgWithSourceT $ \cgWithSource -> do
       -- Update the computations with the stamps, and build the computation.
-      compt <- createComputation cgWithSource
+      let cgWithSource' = traceHint ("executeCommand1': cgWithSource = " <> show' (cdVertices cgWithSource <&> \v -> (vertexId v, nodeId (vertexData v)))) $ cgWithSource
+      compt <- createComputation cgWithSource'
       _ret compt $ \comp -> do
         -- Run the computation.
         session <- get
@@ -114,7 +117,7 @@ waitForCompletion :: Computation -> SparkState (Try Cell)
 waitForCompletion comp = do
   -- We track all the observables, instead of simply the targets.
   let obss = getObservables comp
-  let trackedNodes = obss <&> \n ->
+  let trackedNodes = traceHint ("waitForCompletion: trackedNodes=") $ obss <&> \n ->
         (nodeId n, nodePath n,
          unSQLType (nodeType n), nodePath n)
   nrs' <- _computationMultiStatus (cId comp) HS.empty trackedNodes
@@ -123,7 +126,7 @@ waitForCompletion comp = do
   let targetNid = case cTerminalNodeIds comp of
         [nid] -> nid
         -- TODO: handle the case of multiple terminal targets
-        l -> missing $ "executeCommand1': missing multilist case with " <> show' l
+        l -> missing $ "waitForCompletion: missing multilist case with " <> show' l
   case filter (\z -> fst z == targetNid) nrs' of
     [(_, tc)] -> return tc
     l -> return $ tryError $ "Expected single result, got " <> show' l
@@ -154,8 +157,10 @@ updateSourceInfo cg = do
     logDebugN $ "updateSourceInfo: retrieved stamps " <> show' stampsRet
     let stampst = sequence $ _f <$> stampsRet
     logDebugN $ "updateSourceInfo: cg = " <> show' cg
+    logDebugN $ "updateSourceInfo: cg = " <> show' (cdVertices cg <&> \v -> (vertexId v, nodeId (vertexData v)))
     let cgt = insertSourceInfo cg =<< stampst
     logDebugN $ "updateSourceInfo: after source insertion " <> show' cgt
+    logDebugN $ "updateSourceInfo: after: cgt = " <> show' (cdVertices (forceRight cgt) <&> \v -> (vertexId v, nodeId (vertexData v)))
     return cgt
 
 
@@ -339,7 +344,7 @@ _computationMultiStatus cid done l = do
   -- Poll a bunch of nodes to try to get a status update.
   let statusl = _try (_computationStatus session cid) <$> needsProcessing :: [SparkState (NodeId, NodePath, DataType, PossibleNodeStatus)]
   status <- sequence statusl
-  -- logDebugN $ "_computationMultiStatus: retreived status " <> show' status
+  logDebugN $ "_computationMultiStatus: retreived status " <> show' status
   -- Update the state with the new data
   (updated, statusUpdate) <- returnPure $ updateCache cid status
   forM_ statusUpdate $ \(p, s) -> case s of

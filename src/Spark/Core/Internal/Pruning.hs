@@ -64,7 +64,7 @@ pruneGraph :: (Show v) =>
   -- The graph
   Graph v StructureEdge ->
   Graph v StructureEdge
-pruneGraph c getNodeId f g = trace ("pruneGraph: g = " ++ show g ++ " cache=" ++ show c) $
+pruneGraph c getNodeId f g = trace ("pruneGraph: g = " ++ show g ++ "\npruneGraph: cache=" ++ show c) $
   -- Prune the node that we do not want
   let depGraph = reverseGraph g
       fop v = if HM.member (getNodeId v) c

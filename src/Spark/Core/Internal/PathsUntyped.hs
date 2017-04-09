@@ -58,7 +58,8 @@ instance HasNodeName UntypedNode where
 -- Stitches the nodes together to make sure that the edges in the graph also
 -- correspond to the dependencies in the nodes themselves.
 -- This does not update the nodeIds
--- TODO is it needed?
+-- This must happen before the pruning is performed, otherwise the node IDs will
+-- not match.
 tieNodes :: ComputeDag UntypedNode StructureEdge -> ComputeDag UntypedNode StructureEdge
 tieNodes cd =
   let g = computeGraphToGraph cd

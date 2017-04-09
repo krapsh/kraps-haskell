@@ -32,6 +32,7 @@ import Control.Arrow((&&&))
 import Formatting
 import qualified Data.Map.Strict as M
 import qualified Data.HashMap.Strict as HM
+import Debug.Trace
 
 import Spark.Core.Dataset
 import Spark.Core.Try
@@ -69,7 +70,8 @@ prepareComputation cg = do
   let compt = do
         cg2 <- performGraphTransforms session cg
         -- Build the computation
-        _buildComputation session cg2
+        let cg3 = trace ("prepareComputation: cg2=" <> show (cdVertices cg2 <&> \v -> (vertexId v, nodeId (vertexData v)))) $ cg2
+        _buildComputation session cg3
   when (isRight compt) _increaseCompCounter
   return compt
 
@@ -129,26 +131,33 @@ buildComputationGraph ld = do
 This could all be done on the server side at this point.
 -}
 performGraphTransforms :: SparkSession -> ComputeGraph -> Try ComputeGraph
-performGraphTransforms session cg = do
-  let g = computeGraphToGraph cg -- traceHint "_performGraphTransforms g=" $
+performGraphTransforms session cg = trace ("performGraphTransforms: cg=" <> show (cdVertices cg <&> \v -> (vertexId v, nodeId (vertexData v)))) $ do
+  -- Tie the nodes to ensure that the node IDs match the topology and
+  -- content of the graph.
+  -- TODO: make a special function for tying + pruning, it is easy to forget.
+  let tiedCg' = tieNodes cg
+  let tiedCg = trace ("performGraphTransforms: tied cg=" <> show (cdVertices tiedCg' <&> \v -> (vertexId v, nodeId (vertexData v)))) $ tiedCg'
+  let g = computeGraphToGraph tiedCg -- traceHint "_performGraphTransforms g=" $
   let conf = ssConf session
   let pruned = if confUseNodePrunning conf
                then pruneGraphDefault (ssNodeCache session) g
                else g
+  -- Autocache + caching pass pass
+  -- TODO: separate in a function
   let acg = fillAutoCache cachingType autocacheGen pruned -- traceHint "_performGraphTransforms: After autocaching:" $
   g' <- tryEither acg
   failures <- tryEither $ checkCaching g' cachingType
   case failures of
     [] -> return (graphToComputeGraph g')
     _ -> tryError $ sformat ("Found some caching errors: "%sh) failures
+  -- TODO: we could add an extra pruning pass here
 
 _buildComputation :: SparkSession -> ComputeGraph -> Try Computation
 _buildComputation session cg =
   let sid = ssId session
       cid = (ComputationID . pack . show . ssCommandCounter) session
-      tiedCg = tieNodes cg
-      allNodes = vertexData <$> toList (cdVertices tiedCg)
-      terminalNodes = vertexData <$> toList (cdOutputs tiedCg)
+      allNodes = vertexData <$> toList (cdVertices cg)
+      terminalNodes = vertexData <$> toList (cdOutputs cg)
       terminalNodePaths = nodePath <$> terminalNodes
       terminalNodeIds = nodeId <$> terminalNodes
   -- TODO it is missing the first node here, hoping it is the first one.
@@ -214,7 +223,9 @@ getTargetNodes comp =
 getObservables :: Computation -> [UntypedLocalData]
 getObservables comp =
   let fun n = case asLocalObservable <$> castLocality n of
-          Right (Right x) -> Just x
+          Right (Right x) ->
+              let x' = trace ("getObservables: " ++ show (nodeId n) ++ "->" ++ show (nodeId x) ++ " : " ++ show x) x
+              in Just x'
           _ -> Nothing
   in catMaybes $ fun <$> cNodes comp
 
