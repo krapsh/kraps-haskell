@@ -13,7 +13,8 @@ module Spark.IO.Internal.OutputCommon(
   partition',
   bucket,
   bucket',
-  saveDefaults
+  saveDefaults,
+  saveCol
 ) where
 
 -- import Data.Text(Text)
@@ -91,7 +92,7 @@ It returns true if the update was successful. The return type is subject to
  change.
 -}
 saveCol :: SavingDescription ref a -> LocalData Bool
-saveCol sd = missing "saveCol"
+saveCol _ = missing "saveCol"
 
 -- test :: Int
 -- test =

@@ -32,7 +32,6 @@ import Control.Arrow((&&&))
 import Formatting
 import qualified Data.Map.Strict as M
 import qualified Data.HashMap.Strict as HM
-import Debug.Trace
 
 import Spark.Core.Dataset
 import Spark.Core.Try
@@ -69,9 +68,7 @@ prepareComputation cg = do
   session <- get
   let compt = do
         cg2 <- performGraphTransforms session cg
-        -- Build the computation
-        let cg3 = trace ("prepareComputation: cg2=" <> show (cdVertices cg2 <&> \v -> (vertexId v, nodeId (vertexData v)))) $ cg2
-        _buildComputation session cg3
+        _buildComputation session cg2
   when (isRight compt) _increaseCompCounter
   return compt
 
@@ -131,20 +128,19 @@ buildComputationGraph ld = do
 This could all be done on the server side at this point.
 -}
 performGraphTransforms :: SparkSession -> ComputeGraph -> Try ComputeGraph
-performGraphTransforms session cg = trace ("performGraphTransforms: cg=" <> show (cdVertices cg <&> \v -> (vertexId v, nodeId (vertexData v)))) $ do
+performGraphTransforms session cg = do
   -- Tie the nodes to ensure that the node IDs match the topology and
   -- content of the graph.
   -- TODO: make a special function for tying + pruning, it is easy to forget.
-  let tiedCg' = tieNodes cg
-  let tiedCg = trace ("performGraphTransforms: tied cg=" <> show (cdVertices tiedCg' <&> \v -> (vertexId v, nodeId (vertexData v)))) $ tiedCg'
-  let g = computeGraphToGraph tiedCg -- traceHint "_performGraphTransforms g=" $
+  let tiedCg = tieNodes cg
+  let g = computeGraphToGraph tiedCg
   let conf = ssConf session
   let pruned = if confUseNodePrunning conf
                then pruneGraphDefault (ssNodeCache session) g
                else g
   -- Autocache + caching pass pass
   -- TODO: separate in a function
-  let acg = fillAutoCache cachingType autocacheGen pruned -- traceHint "_performGraphTransforms: After autocaching:" $
+  let acg = fillAutoCache cachingType autocacheGen pruned
   g' <- tryEither acg
   failures <- tryEither $ checkCaching g' cachingType
   case failures of
@@ -166,7 +162,7 @@ _buildComputation session cg =
       return $ Computation sid cid allNodes [p] p terminalNodeIds
     _ -> tryError $ sformat ("Programming error in _build1: cg="%sh) cg
 
-_updateVertex :: M.Map HdfsPath DataInputStamp -> UntypedNode -> Try (UntypedNode)
+_updateVertex :: M.Map HdfsPath DataInputStamp -> UntypedNode -> Try UntypedNode
 _updateVertex m un =
   let no = nodeOp un in case hdfsPath no of
     Just p -> case M.lookup p m of
@@ -180,7 +176,7 @@ _updateVertex2 ::
   UntypedNode ->
   [(UntypedNode, StructureEdge)] ->
   Try UntypedNode
-_updateVertex2 m un l =
+_updateVertex2 m un _ =
   _updateVertex m un
 
 _increaseCompCounter :: SparkStatePure ()
@@ -223,9 +219,7 @@ getTargetNodes comp =
 getObservables :: Computation -> [UntypedLocalData]
 getObservables comp =
   let fun n = case asLocalObservable <$> castLocality n of
-          Right (Right x) ->
-              let x' = trace ("getObservables: " ++ show (nodeId n) ++ "->" ++ show (nodeId x) ++ " : " ++ show x) x
-              in Just x'
+          Right (Right x) -> return x
           _ -> Nothing
   in catMaybes $ fun <$> cNodes comp
 

@@ -79,7 +79,7 @@ buildVertexListBounded x boundary =
     lexico = _lexicographic vertexToId traversals in lexico
 
 -- | Builds a graph by expanding a start vertex.
-buildGraph :: forall v e. (GraphOperations v e, Show v, Show e) =>
+buildGraph :: forall v e. (GraphOperations v e, Show v) =>
   v -> DagTry (Graph v e)
 buildGraph start = buildVertexList start <&> \vxData ->
   let vertices = [Vertex (vertexToId vx) vx | vx <- vxData]
@@ -96,8 +96,8 @@ buildGraph start = buildVertexList start <&> \vxData ->
               in VertexEdge v' e
             vedges = g <$> expandVertex x
         in (vid, V.fromList vedges)
-      vxs = traceHint "buildGraph: vertices=" $ V.fromList vertices
-      edges = traceHint "buildGraph: edges=" $ f <$> vxData
+      vxs = V.fromList vertices
+      edges = f <$> vxData
       adj = M.fromList edges
   in Graph adj vxs
 
@@ -375,7 +375,7 @@ _pruneLexicographic vertices visited (hvid : t) =
       _pruneLexicographic vertices visited t
 
 _transFilter :: (Show v, Show e) => (v -> FilterOp) -> v -> [(FilterVertex v, e)] -> FilterVertex v
-_transFilter filt vx l = traceHint ("_transFilter: vx=" <> show' vx <> " l=" <> show' l<>" res=") $
+_transFilter filt vx l =
   let f (KeepVertex _, _) = True
       f (DropChildren _, _) = False
       f (RemoveVertex _, _) = False

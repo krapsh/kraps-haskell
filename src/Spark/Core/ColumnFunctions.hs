@@ -16,7 +16,7 @@ module Spark.Core.ColumnFunctions(
   asDoubleCol
 ) where
 
-import Spark.Core.Internal.ArithmeticsImpl
+import Spark.Core.Internal.ArithmeticsImpl()
 import Spark.Core.Internal.ColumnStandard
 import Spark.Core.Internal.AggregationFunctions
 import Spark.Core.Internal.Projections()
