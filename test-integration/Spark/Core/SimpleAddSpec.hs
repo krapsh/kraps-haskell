@@ -45,7 +45,8 @@ run :: String -> IO () -> SpecWith (Arg (IO ()))
 run s f = it s $ do
   createSparkSessionDef $ defaultConf {
     confRequestedSessionName = Data.Text.pack s,
-    confPollingIntervalMillis = 100 }
+    confPollingIntervalMillis = 100,
+    confUseNodePrunning = True }
   f
   -- This is horribly not robust to any sort of failure, but it will do for now
   -- TODO(kps) make more robust
