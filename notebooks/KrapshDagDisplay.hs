@@ -77,7 +77,8 @@ nodeToDisplayNode cn' =
       op = simpleShowOp . nodeOp $ cn'
       tp = T.pack . show . nodeType $ cn'
       loc = if _cnLocality cn' == Local then "local" else "distributed"
-      dct = M.fromList [("sqlType", tp),("locality", loc)]
+      nid = show' $ nodeId cn'
+      dct = M.fromList [("sqlType", tp),("locality", loc), ("id", nid)]
   in DisplayNode nm op dct
 
 computeGraphToDisplayGraph :: ComputeGraph -> DisplayGraph

@@ -96,10 +96,9 @@ executeCommand1 ld = do
 -- The main function to launch computations.
 executeCommand1' :: UntypedLocalData -> SparkState (Try Cell)
 executeCommand1' ld = do
-  logDebugN $ "executeCommand1: computing observable " <> show' ld
+  logDebugN $ "executeCommand1': computing observable " <> show' ld
   -- Retrieve the computation graph
   let cgt = buildComputationGraph ld
-  logDebugN $ "executeCommand1: cgt= " <> show' cgt
   _ret cgt $ \cg -> do
     cgWithSourceT <- updateSourceInfo cg
     _ret cgWithSourceT $ \cgWithSource -> do
@@ -118,14 +117,13 @@ waitForCompletion comp = do
   let trackedNodes = obss <&> \n ->
         (nodeId n, nodePath n,
          unSQLType (nodeType n), nodePath n)
-  logDebugN $ "executeCommand1: Tracked nodes are " <> show' trackedNodes
   nrs' <- _computationMultiStatus (cId comp) HS.empty trackedNodes
   -- Find the main result again in the list of everything.
   -- TODO: we actually do not need all the results, just target nodes.
   let targetNid = case cTerminalNodeIds comp of
         [nid] -> nid
         -- TODO: handle the case of multiple terminal targets
-        l -> missing $ "executeCommand1': missing multilist case with " <> show' l
+        l -> missing $ "waitForCompletion: missing multilist case with " <> show' l
   case filter (\z -> fst z == targetNid) nrs' of
     [(_, tc)] -> return tc
     l -> return $ tryError $ "Expected single result, got " <> show' l
@@ -136,8 +134,7 @@ computationStats ::
 computationStats cid = do
   logDebugN $ "computationStats: stats for " <> show' cid
   session <- get
-  x <- _computationStats session cid
-  return x
+  _computationStats session cid
 
 {-| Exposed for debugging -}
 createComputation :: ComputeGraph -> SparkState (Try Computation)
@@ -150,10 +147,10 @@ updateSourceInfo cg = do
   if null sources
   then return (pure cg)
   else do
-    logDebugN $ "executeCommand1: found sources " <> show' sources
+    logDebugN $ "updateSourceInfo: found sources " <> show' sources
     -- Get the source stamps. Any error at this point is considered fatal.
     stampsRet <- checkDataStamps sources
-    logDebugN $ "executeCommand1: retrieved stamps " <> show' stampsRet
+    logDebugN $ "updateSourceInfo: retrieved stamps " <> show' stampsRet
     let stampst = sequence $ _f <$> stampsRet
     let cgt = insertSourceInfo cg =<< stampst
     return cgt
@@ -287,7 +284,6 @@ _compEndPointStatus sess compId =
 _ensureSession :: (MonadLoggerIO m) => SparkSession -> m ()
 _ensureSession session = do
   let url = _sessionEndPoint session <> "/create"
-  -- logDebugN $ "url:" <> url
   _ <- _post url (toJSON 'a')
   return ()
 
@@ -306,12 +302,8 @@ _computationStatus session compId npath = do
   let base' = _compEndPointStatus session compId
   let rest = prettyNodePath npath
   let url = base' <> rest
-  -- logDebugN $ "Sending computations status request at url: " <> url
   _ <- _get url
-  -- raw <- _get url
-  --logDebugN $ sformat ("Got raw status: "%sh) raw
   status <- liftIO (W.asJSON =<< W.get (T.unpack url) :: IO (W.Response PossibleNodeStatus))
-  --logDebugN $ sformat ("Got status: "%sh) status
   let s = status ^. responseBody
   return s
 
@@ -329,17 +321,14 @@ _computationMultiStatus ::
   SparkState [(NodeId, Try Cell)]
 _computationMultiStatus _ _ [] = return []
 _computationMultiStatus cid done l = do
-  -- logDebugN $ "_computationMultiStatus: tracking " <> show' l
   session <- get
   -- Find the nodes that still need processing (i.e. that have not previously
   -- finished with a success)
   let f (nid, _, _, _) = not $ HS.member nid done
   let needsProcessing = filter f l
-  -- logDebugN $ "_computationMultiStatus: needsProcessing " <> show' needsProcessing
   -- Poll a bunch of nodes to try to get a status update.
   let statusl = _try (_computationStatus session cid) <$> needsProcessing :: [SparkState (NodeId, NodePath, DataType, PossibleNodeStatus)]
   status <- sequence statusl
-  -- logDebugN $ "_computationMultiStatus: retreived status " <> show' status
   -- Update the state with the new data
   (updated, statusUpdate) <- returnPure $ updateCache cid status
   forM_ statusUpdate $ \(p, s) -> case s of
@@ -349,8 +338,6 @@ _computationMultiStatus cid done l = do
         logInfoN $ "_computationMultiStatus: " <> prettyNodePath p <> " finished (ERROR)"
       NodeCacheRunning ->
         logInfoN $ "_computationMultiStatus: " <> prettyNodePath p <> " running"
-  -- logInfoN $ "_computationMultiStatus: updated status " <> show' statusUpdate
-  -- logDebugN $ "_computationMultiStatus: updated status " <> show' updated
   -- Filter out the updated nodes, so that we do not ask for them again.
   let updatedNids = HS.union done (HS.fromList (fst <$> updated))
   let g (nid, _, _, _) = not $ HS.member nid updatedNids
@@ -374,11 +361,7 @@ _computationStats :: (MonadLoggerIO m) =>
 _computationStats session compId = do
   let url = _compEndPointStatus session compId <> "/" -- The final / is mandatory
   logDebugN $ "Sending computations stats request at url: " <> url
-  -- _ <- _get url
-  -- raw <- _get url
-  --logDebugN $ sformat ("Got raw status: "%sh) raw
   stats <- liftIO (W.asJSON =<< W.get (T.unpack url) :: IO (W.Response BatchComputationResult))
-  --logDebugN $ sformat ("Got status: "%sh) status
   let s = stats ^. responseBody
   return s
 
@@ -391,7 +374,6 @@ _waitSingleComputation session comp npath =
     extract (NodeFinishedSuccess (Just s) _) = Just $ Right s
     extract (NodeFinishedFailure f) = Just $ Left f
     extract _ = Nothing
-    -- getStatus :: m PossibleNodeStatus
     getStatus = _computationStatus session (cId comp) npath
     i = confPollingIntervalMillis $ ssConf session
   in

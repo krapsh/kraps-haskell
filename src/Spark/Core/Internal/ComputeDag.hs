@@ -74,7 +74,7 @@ mapVertices f cd =
 mapVertexData :: (v -> v') -> ComputeDag v e -> ComputeDag v' e
 mapVertexData f = mapVertices (f . vertexData)
 
-buildCGraph :: (GraphOperations v e, Show v, Show e) =>
+buildCGraph :: (GraphOperations v e, Show v) =>
   v -> DagTry (ComputeDag v e)
 buildCGraph n = graphToComputeGraph <$> buildGraph n
 

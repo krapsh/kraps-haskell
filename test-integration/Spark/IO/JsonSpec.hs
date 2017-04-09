@@ -29,6 +29,8 @@ spec = do
       let c = collect' (asCol' df)
       c1 <- exec1Def' c
       c1 `shouldBe` rowArray [rowArray [StringElement "x"]]
+      c2 <- exec1Def' c
+      c2 `shouldBe` rowArray [rowArray [StringElement "x"]]
     run "simple inference" $ do
       let xs = [TestStruct7 "x"]
       let js = encode xs

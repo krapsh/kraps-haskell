@@ -49,7 +49,7 @@ import Spark.Core.Internal.OpFunctions(hdfsPath, updateSourceStamp)
 import Spark.Core.Internal.OpStructures(HdfsPath(..), DataInputStamp)
 -- Required to import the instances.
 import Spark.Core.Internal.Paths()
-import Spark.Core.Internal.DAGFunctions(buildVertexList)
+import Spark.Core.Internal.DAGFunctions(buildVertexList, graphMapVertices)
 import Spark.Core.Internal.DAGStructures
 import Spark.Core.Internal.DatasetFunctions
 import Spark.Core.Internal.DatasetStructures
@@ -68,21 +68,24 @@ prepareComputation cg = do
   session <- get
   let compt = do
         cg2 <- performGraphTransforms session cg
-        -- Build the computation
         _buildComputation session cg2
   when (isRight compt) _increaseCompCounter
   return compt
 
-{-| Exposed for debugging -}
+{-| Exposed for debugging
+
+Inserts the source information into the graph.
+
+Note: after that, the node IDs may be different. The names and the paths
+will be kept though.
+-}
 insertSourceInfo :: ComputeGraph -> [(HdfsPath, DataInputStamp)] -> Try ComputeGraph
 insertSourceInfo cg l = do
   let m = M.fromList l
-      -- Only transform the sinks, since there is no writing.
-  let inputs = cdInputs cg
-  inputs' <- sequence $ _updateVertex m <$> inputs
-  return $ cg { cdInputs = inputs' }
-
-
+  let g = computeGraphToGraph cg
+  g2 <- graphMapVertices g (_updateVertex2 m)
+  let cg2 = graphToComputeGraph g2
+  return cg2
 
 {-| A list of file sources that are being requested by the compute graph -}
 inputSourcesRead :: ComputeGraph -> [HdfsPath]
@@ -126,25 +129,31 @@ This could all be done on the server side at this point.
 -}
 performGraphTransforms :: SparkSession -> ComputeGraph -> Try ComputeGraph
 performGraphTransforms session cg = do
-  let g = computeGraphToGraph cg -- traceHint "_performGraphTransforms g=" $
+  -- Tie the nodes to ensure that the node IDs match the topology and
+  -- content of the graph.
+  -- TODO: make a special function for tying + pruning, it is easy to forget.
+  let tiedCg = tieNodes cg
+  let g = computeGraphToGraph tiedCg
   let conf = ssConf session
   let pruned = if confUseNodePrunning conf
                then pruneGraphDefault (ssNodeCache session) g
                else g
-  let acg = fillAutoCache cachingType autocacheGen pruned -- traceHint "_performGraphTransforms: After autocaching:" $
+  -- Autocache + caching pass pass
+  -- TODO: separate in a function
+  let acg = fillAutoCache cachingType autocacheGen pruned
   g' <- tryEither acg
   failures <- tryEither $ checkCaching g' cachingType
   case failures of
     [] -> return (graphToComputeGraph g')
     _ -> tryError $ sformat ("Found some caching errors: "%sh) failures
+  -- TODO: we could add an extra pruning pass here
 
 _buildComputation :: SparkSession -> ComputeGraph -> Try Computation
 _buildComputation session cg =
   let sid = ssId session
       cid = (ComputationID . pack . show . ssCommandCounter) session
-      tiedCg = tieNodes cg
-      allNodes = vertexData <$> toList (cdVertices tiedCg)
-      terminalNodes = vertexData <$> toList (cdOutputs tiedCg)
+      allNodes = vertexData <$> toList (cdVertices cg)
+      terminalNodes = vertexData <$> toList (cdOutputs cg)
       terminalNodePaths = nodePath <$> terminalNodes
       terminalNodeIds = nodeId <$> terminalNodes
   -- TODO it is missing the first node here, hoping it is the first one.
@@ -153,15 +162,22 @@ _buildComputation session cg =
       return $ Computation sid cid allNodes [p] p terminalNodeIds
     _ -> tryError $ sformat ("Programming error in _build1: cg="%sh) cg
 
-_updateVertex :: M.Map HdfsPath DataInputStamp -> Vertex UntypedNode -> Try (Vertex UntypedNode)
-_updateVertex m v =
-  let un = vertexData v
-      no = nodeOp un in case hdfsPath no of
+_updateVertex :: M.Map HdfsPath DataInputStamp -> UntypedNode -> Try UntypedNode
+_updateVertex m un =
+  let no = nodeOp un in case hdfsPath no of
     Just p -> case M.lookup p m of
-      Just dis -> updateSourceStamp no dis <&> \no' ->
-          v { vertexData = updateNodeOp un no' }
+      Just dis -> updateSourceStamp no dis <&> updateNodeOp un
+      -- TODO: this is for debugging, but it could be eventually relaxed.
       Nothing -> tryError $ "_updateVertex: Expected to find path " <> show' p
-    Nothing -> pure v
+    Nothing -> pure un
+
+_updateVertex2 ::
+  M.Map HdfsPath DataInputStamp ->
+  UntypedNode ->
+  [(UntypedNode, StructureEdge)] ->
+  Try UntypedNode
+_updateVertex2 m un _ =
+  _updateVertex m un
 
 _increaseCompCounter :: SparkStatePure ()
 _increaseCompCounter = get >>= \session ->
@@ -203,7 +219,7 @@ getTargetNodes comp =
 getObservables :: Computation -> [UntypedLocalData]
 getObservables comp =
   let fun n = case asLocalObservable <$> castLocality n of
-          Right (Right x) -> Just x
+          Right (Right x) -> return x
           _ -> Nothing
   in catMaybes $ fun <$> cNodes comp
 

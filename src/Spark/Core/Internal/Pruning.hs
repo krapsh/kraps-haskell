@@ -14,7 +14,6 @@ module Spark.Core.Internal.Pruning(
 ) where
 
 import Data.HashMap.Strict as HM
-import Debug.Trace
 
 import Spark.Core.StructuresInternal(NodeId, NodePath, ComputationID)
 import Spark.Core.Internal.DatasetStructures(UntypedNode, StructureEdge)
@@ -22,7 +21,6 @@ import Spark.Core.Internal.DAGFunctions
 import Spark.Core.Internal.DAGStructures
 import Spark.Core.Internal.DatasetFunctions
 import Spark.Core.Internal.OpStructures
-import Spark.Core.Internal.Utilities
 
 
 {-| The status of a node being computed.
@@ -64,13 +62,13 @@ pruneGraph :: (Show v) =>
   -- The graph
   Graph v StructureEdge ->
   Graph v StructureEdge
-pruneGraph c getNodeId f g = trace ("pruneGraph: g = " ++ show g ++ " cache=" ++ show c) $
+pruneGraph c getNodeId f g =
   -- Prune the node that we do not want
   let depGraph = reverseGraph g
       fop v = if HM.member (getNodeId v) c
               then CutChildren
               else Keep
-      filtered = traceHint ("pruneGraph: filter =") $ graphFilterVertices fop depGraph
+      filtered = graphFilterVertices fop depGraph
       -- Bring back to normal flow.
       comFiltered = reverseGraph filtered
       -- Replace the nodes in the cache by place holders.
@@ -78,7 +76,7 @@ pruneGraph c getNodeId f g = trace ("pruneGraph: g = " ++ show g ++ " cache=" ++
       repOp v = case HM.lookup (getNodeId v) c of
                   Just nci -> f v nci
                   Nothing -> v
-      g' = traceHint "pruneGraph: g'=" $ graphMapVertices' repOp comFiltered
+      g' = graphMapVertices' repOp comFiltered
   in g'
 
 pruneGraphDefault ::

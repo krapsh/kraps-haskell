@@ -26,7 +26,7 @@ import Spark.Core.Context
 import Spark.Core.Try
 import Spark.Core.Dataset
 
-import Spark.Core.Internal.Utilities(forceRight, traceHint)
+import Spark.Core.Internal.Utilities(forceRight)
 import Spark.Core.Internal.DatasetFunctions(asDF, emptyDataset, emptyLocalData)
 import Spark.Core.Internal.TypesStructures(SQLType(..))
 import Spark.Core.Internal.OpStructures
@@ -139,9 +139,9 @@ _inferSchema = executeCommand1 . _inferSchemaCmd
 -- aggregator.
 _inferSchemaCmd :: SourceDescription -> LocalData DataType
 _inferSchemaCmd sd = emptyLocalData no sqlt where
-  sqlt = traceHint "_inferSchemaCmd: sqlt" buildType :: SQLType DataType
-  dt = traceHint "_inferSchemaCmd: dt" $ unSQLType sqlt
-  so = traceHint "_inferSchemaCmd: so" StandardOperator {
+  sqlt = buildType :: SQLType DataType
+  dt = unSQLType sqlt
+  so = StandardOperator {
       soName = "org.spark.InferSchema",
       soOutputType = dt,
       soExtra = A.toJSON sd
