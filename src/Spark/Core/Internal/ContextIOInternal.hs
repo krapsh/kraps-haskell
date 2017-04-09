@@ -148,12 +148,14 @@ updateSourceInfo cg = do
   if null sources
   then return (pure cg)
   else do
-    logDebugN $ "executeCommand1: found sources " <> show' sources
+    logDebugN $ "updateSourceInfo: found sources " <> show' sources
     -- Get the source stamps. Any error at this point is considered fatal.
     stampsRet <- checkDataStamps sources
-    logDebugN $ "executeCommand1: retrieved stamps " <> show' stampsRet
+    logDebugN $ "updateSourceInfo: retrieved stamps " <> show' stampsRet
     let stampst = sequence $ _f <$> stampsRet
+    logDebugN $ "updateSourceInfo: cg = " <> show' cg
     let cgt = insertSourceInfo cg =<< stampst
+    logDebugN $ "updateSourceInfo: after source insertion " <> show' cgt
     return cgt
 
 

@@ -49,7 +49,7 @@ import Spark.Core.Internal.OpFunctions(hdfsPath, updateSourceStamp)
 import Spark.Core.Internal.OpStructures(HdfsPath(..), DataInputStamp)
 -- Required to import the instances.
 import Spark.Core.Internal.Paths()
-import Spark.Core.Internal.DAGFunctions(buildVertexList)
+import Spark.Core.Internal.DAGFunctions(buildVertexList, graphMapVertices)
 import Spark.Core.Internal.DAGStructures
 import Spark.Core.Internal.DatasetFunctions
 import Spark.Core.Internal.DatasetStructures
@@ -73,16 +73,20 @@ prepareComputation cg = do
   when (isRight compt) _increaseCompCounter
   return compt
 
-{-| Exposed for debugging -}
+{-| Exposed for debugging
+
+Inserts the source information into the graph.
+
+Note: after that, the node IDs may be different. The names and the paths
+will be kept though.
+-}
 insertSourceInfo :: ComputeGraph -> [(HdfsPath, DataInputStamp)] -> Try ComputeGraph
 insertSourceInfo cg l = do
   let m = M.fromList l
-      -- Only transform the sinks, since there is no writing.
-  let inputs = cdInputs cg
-  inputs' <- sequence $ _updateVertex m <$> inputs
-  return $ cg { cdInputs = inputs' }
-
-
+  let g = computeGraphToGraph cg
+  g2 <- graphMapVertices g (_updateVertex2 m)
+  let cg2 = graphToComputeGraph g2
+  return cg2
 
 {-| A list of file sources that are being requested by the compute graph -}
 inputSourcesRead :: ComputeGraph -> [HdfsPath]
@@ -153,15 +157,22 @@ _buildComputation session cg =
       return $ Computation sid cid allNodes [p] p terminalNodeIds
     _ -> tryError $ sformat ("Programming error in _build1: cg="%sh) cg
 
-_updateVertex :: M.Map HdfsPath DataInputStamp -> Vertex UntypedNode -> Try (Vertex UntypedNode)
-_updateVertex m v =
-  let un = vertexData v
-      no = nodeOp un in case hdfsPath no of
+_updateVertex :: M.Map HdfsPath DataInputStamp -> UntypedNode -> Try (UntypedNode)
+_updateVertex m un =
+  let no = nodeOp un in case hdfsPath no of
     Just p -> case M.lookup p m of
-      Just dis -> updateSourceStamp no dis <&> \no' ->
-          v { vertexData = updateNodeOp un no' }
+      Just dis -> updateSourceStamp no dis <&> updateNodeOp un
+      -- TODO: this is for debugging, but it could be eventually relaxed.
       Nothing -> tryError $ "_updateVertex: Expected to find path " <> show' p
-    Nothing -> pure v
+    Nothing -> pure un
+
+_updateVertex2 ::
+  M.Map HdfsPath DataInputStamp ->
+  UntypedNode ->
+  [(UntypedNode, StructureEdge)] ->
+  Try UntypedNode
+_updateVertex2 m un l =
+  _updateVertex m un
 
 _increaseCompCounter :: SparkStatePure ()
 _increaseCompCounter = get >>= \session ->
