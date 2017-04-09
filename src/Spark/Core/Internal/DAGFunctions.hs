@@ -374,7 +374,7 @@ _pruneLexicographic vertices visited (hvid : t) =
     Nothing ->
       _pruneLexicographic vertices visited t
 
-_transFilter :: (Show v, Show e) => (v -> FilterOp) -> v -> [(FilterVertex v, e)] -> FilterVertex v
+_transFilter :: (v -> FilterOp) -> v -> [(FilterVertex v, e)] -> FilterVertex v
 _transFilter filt vx l =
   let f (KeepVertex _, _) = True
       f (DropChildren _, _) = False
