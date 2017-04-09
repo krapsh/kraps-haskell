@@ -87,6 +87,7 @@ headFieldPath (FieldPath v) | V.null v = Nothing
 headFieldPath (FieldPath v) = Just $ V.head v
 
 -- | The concatenated path. This is the inverse function of fieldPath.
+-- | TODO: this one should be hidden?
 catNodePath :: NodePath -> T.Text
 catNodePath (NodePath np) =
   T.intercalate "/" (unNodeName <$> V.toList np)

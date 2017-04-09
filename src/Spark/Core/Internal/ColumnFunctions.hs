@@ -321,7 +321,7 @@ instance forall ref a. Show (Column ref a) where
       -- path = T.pack . show . _cReferingPath $ c
       -- no = prettyShowColOp . colOp $ c
       fields = T.pack . show . colType $ c
-      nn = unNodeName . nodeName . _cOrigin $ c
+      nn = prettyNodePath . nodePath . _cOrigin $ c
     in T.unpack $ toStrict $ TF.format txt (name, fields, nn)
 
 -- *********** Arithmetic operations **********

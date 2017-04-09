@@ -99,6 +99,7 @@ executeCommand1' ld = do
   logDebugN $ "executeCommand1: computing observable " <> show' ld
   -- Retrieve the computation graph
   let cgt = buildComputationGraph ld
+  logDebugN $ "executeCommand1: cgt= " <> show' cgt
   _ret cgt $ \cg -> do
     cgWithSourceT <- updateSourceInfo cg
     _ret cgWithSourceT $ \cgWithSource -> do
@@ -114,8 +115,9 @@ waitForCompletion :: Computation -> SparkState (Try Cell)
 waitForCompletion comp = do
   -- We track all the observables, instead of simply the targets.
   let obss = getObservables comp
-  -- TODO: remove the node name, it is not a good piece of info
-  let trackedNodes = obss <&> \n -> (nodeId n, nodePath n, unSQLType (nodeType n), nodeName n)
+  let trackedNodes = obss <&> \n ->
+        (nodeId n, nodePath n,
+         unSQLType (nodeType n), nodePath n)
   logDebugN $ "executeCommand1: Tracked nodes are " <> show' trackedNodes
   nrs' <- _computationMultiStatus (cId comp) HS.empty trackedNodes
   -- Find the main result again in the list of everything.
@@ -294,16 +296,16 @@ _sendComputation :: (MonadLoggerIO m) => SparkSession -> Computation -> m ()
 _sendComputation session comp = do
   let base' = _compEndPoint session (cId comp)
   let url = base' <> "/create"
-  logInfoN $ "Sending computations at url: " <> url
+  logInfoN $ "Sending computations at url: " <> url <> "with nodes: " <> show' (cNodes comp)
   _ <- _post url (toJSON (cNodes comp))
   return ()
 
 _computationStatus :: (MonadLoggerIO m) =>
-  SparkSession -> ComputationID -> NodeName -> m PossibleNodeStatus
-_computationStatus session compId nname = do
+  SparkSession -> ComputationID -> NodePath -> m PossibleNodeStatus
+_computationStatus session compId npath = do
   let base' = _compEndPointStatus session compId
-  let rest = unNodeName nname
-  let url = base' <> "/" <> rest
+  let rest = prettyNodePath npath
+  let url = base' <> rest
   -- logDebugN $ "Sending computations status request at url: " <> url
   _ <- _get url
   -- raw <- _get url
@@ -323,7 +325,7 @@ _computationMultiStatus ::
   -- TODO: should we do all the nodes processed in this computation?
   HS.HashSet NodeId ->
   -- The list of nodes for which we have not had completion information so far.
-  [(NodeId, NodePath, DataType, NodeName)] ->
+  [(NodeId, NodePath, DataType, NodePath)] ->
   SparkState [(NodeId, Try Cell)]
 _computationMultiStatus _ _ [] = return []
 _computationMultiStatus cid done l = do
@@ -382,15 +384,15 @@ _computationStats session compId = do
 
 
 _waitSingleComputation :: (MonadLoggerIO m) =>
-  SparkSession -> Computation -> NodeName -> m FinalResult
-_waitSingleComputation session comp nname =
+  SparkSession -> Computation -> NodePath -> m FinalResult
+_waitSingleComputation session comp npath =
   let
     extract :: PossibleNodeStatus -> Maybe FinalResult
     extract (NodeFinishedSuccess (Just s) _) = Just $ Right s
     extract (NodeFinishedFailure f) = Just $ Left f
     extract _ = Nothing
     -- getStatus :: m PossibleNodeStatus
-    getStatus = _computationStatus session (cId comp) nname
+    getStatus = _computationStatus session (cId comp) npath
     i = confPollingIntervalMillis $ ssConf session
   in
     _pollMonad getStatus i extract

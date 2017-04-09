@@ -42,7 +42,7 @@ spec = do
       -- TODO: should it show "value: int" instead?
       -- I think it should show it for distributed nodes only.
       -- SQL is not allowed on observables
-      (show avg) `shouldBe` "myaverage@org.spark.LocalDiv!int"
+      (show avg) `shouldBe` "/myaverage@org.spark.LocalDiv!int"
   describe "pack1" $ do
     it "Extracting and packing one column" $ do
       let numbers = asCol ds1
@@ -56,7 +56,7 @@ spec = do
     it "packing and unpacking one column" $ do
       let ds1' = pack' . asCol $ ds1
       let d' = pretty . extraNodeOpData . nodeOp <$> ds1'
-      d' `shouldBe` Right (T.pack [r|{"colOp":"extraction","field":[]}|])
+      d' `shouldBe` Right (T.pack "{\"cellType\":{\"dt\":\"integer\",\"nullable\":false},\"content\":[1,2,3]}")
     it "packing and unpacking 2 columns, one with a bad name" $ do
       let col1 = asCol ds1
       let col2 = col1 @@ "other"
