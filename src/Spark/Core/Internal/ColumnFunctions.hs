@@ -44,6 +44,7 @@ module Spark.Core.Internal.ColumnFunctions(
   -- projectColDynCol,
   -- projectDColDCol,
   -- Public functions
+  applyCol1,
   untypedCol,
   colFromObs,
   colFromObs',
@@ -66,13 +67,14 @@ import Spark.Core.Internal.ColumnStructures
 import Spark.Core.Internal.DatasetFunctions
 import Spark.Core.Internal.DatasetStructures
 import Spark.Core.Internal.TypesStructures
-import Spark.Core.Try
 import Spark.Core.StructuresInternal
 import Spark.Core.Internal.TypesFunctions
 import Spark.Core.Internal.OpStructures
 import Spark.Core.Internal.OpFunctions(prettyShowColOp, prettyShowColFun)
 import Spark.Core.Internal.AlgebraStructures
 import Spark.Core.Internal.Utilities
+import Spark.Core.Internal.TypesGenerics(SQLTypeable, buildType)
+import Spark.Core.Try
 
 -- ********** Public methods ********
 
@@ -165,6 +167,18 @@ colFieldName :: ColumnData ref a -> FieldName
 colFieldName c =
   fromMaybe (unsafeFieldName . _prettyShowColOp . _cOp $ c)
     (_cReferingPath c)
+
+{-| A converience function for applying one-argument typed functions to
+dynamic column.
+-}
+applyCol1 :: forall x y. (SQLTypeable x) => (forall ref. Column ref x -> Column ref y) -> DynColumn -> DynColumn
+applyCol1 f dc = do
+  c <- dc
+  let t = buildType :: SQLType x
+  c1 <- castCol (colRef c) t dc
+  let c2 = f c1
+  untypedCol c2
+
 
 -- ******** Operations on column operations ********
 

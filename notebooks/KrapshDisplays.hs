@@ -22,6 +22,7 @@ import Spark.Core.Internal.DatasetFunctions(untyped)
 import Spark.Core.Internal.DatasetStructures(ComputeNode)
 import Spark.Core.Internal.Utilities(forceRight)
 import Spark.Core.Internal.Client
+import Spark.Core.StructuresInternal(ComputationID(..))
 import Spark.Core.Try
 
 instance IHaskellDisplay DisplayGraph where
@@ -31,6 +32,8 @@ instance IHaskellDisplay DisplayGraph where
 
 
 showGraph = display . forceRight . nodeToDisplayGraph
+
+showGraph' = showGraph . forceRight
 
 showNameGraph node = showGraph . vertexData . last . forceRight $ x where
   x = do
