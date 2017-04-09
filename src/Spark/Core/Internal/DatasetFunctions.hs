@@ -442,19 +442,19 @@ instance forall loc a. Show (ComputeNode loc a) where
     loc = case nodeLocality ld of
       TypedLocality Local -> "!"
       TypedLocality Distributed -> ":"
-    nn = unNodeName . nodeName $ ld
+    np = prettyNodePath . nodePath $ ld
     no = prettyShowOp . nodeOp $ ld
     fields = T.pack . show . nodeType $ ld in
-      T.unpack $ toStrict $ TF.format txt (nn, no, loc, fields)
+      T.unpack $ toStrict $ TF.format txt (np, no, loc, fields)
 
 instance forall loc a. A.ToJSON (ComputeNode loc a) where
   toJSON node = A.object [
     "locality" .= nodeLocality node,
-    "name" .= nodeName node,
+    "path" .= nodePath node,
     "op" .= (simpleShowOp . nodeOp $ node),
     "extra" .= (extraNodeOpData . nodeOp $ node),
-    "parents" .= (nodeName <$> nodeParents node),
-    "logicalDependencies" .= (nodeName <$> nodeLogicalDependencies node),
+    "parents" .= (nodePath <$> nodeParents node),
+    "logicalDependencies" .= (nodePath <$> nodeLogicalDependencies node),
     "_type" .= (unSQLType . nodeType) node]
 
 instance forall loc. A.ToJSON (TypedLocality loc) where
