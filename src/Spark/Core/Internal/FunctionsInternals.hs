@@ -372,6 +372,10 @@ _replaceField m (GeneralizedTransField n v) = TransformField n <$> _replaceObser
 
 -- Unconditionally packs the column into a dataset.
 _packCol1 :: Column ref a -> ColOp -> Dataset a
+-- Special case for column operations that are no-ops: return the dataset itself.
+_packCol1 c (ColExtraction (FieldPath v)) | V.null v =
+  -- TODO: we should not need to force this operation.
+  forceRight $ castType (colType c) (colOrigin c)
 _packCol1 c op =
   emptyDataset (NodeStructuredTransform op) (colType c)
       `parents` [untyped (colOrigin c)]
