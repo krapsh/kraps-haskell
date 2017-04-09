@@ -134,8 +134,7 @@ performGraphTransforms :: SparkSession -> ComputeGraph -> Try ComputeGraph
 performGraphTransforms session cg = trace ("performGraphTransforms: cg=" <> show (cdVertices cg <&> \v -> (vertexId v, nodeId (vertexData v)))) $ do
   -- Tie the nodes to ensure that the node IDs match the topology and
   -- content of the graph.
-  -- NOTE: after this point, no other transform should be perform, otherwise
-  -- it will not be captured by node pruning.
+  -- TODO: make a special function for tying + pruning, it is easy to forget.
   let tiedCg' = tieNodes cg
   let tiedCg = trace ("performGraphTransforms: tied cg=" <> show (cdVertices tiedCg' <&> \v -> (vertexId v, nodeId (vertexData v)))) $ tiedCg'
   let g = computeGraphToGraph tiedCg -- traceHint "_performGraphTransforms g=" $
@@ -143,12 +142,15 @@ performGraphTransforms session cg = trace ("performGraphTransforms: cg=" <> show
   let pruned = if confUseNodePrunning conf
                then pruneGraphDefault (ssNodeCache session) g
                else g
+  -- Autocache + caching pass pass
+  -- TODO: separate in a function
   let acg = fillAutoCache cachingType autocacheGen pruned -- traceHint "_performGraphTransforms: After autocaching:" $
   g' <- tryEither acg
   failures <- tryEither $ checkCaching g' cachingType
   case failures of
     [] -> return (graphToComputeGraph g')
     _ -> tryError $ sformat ("Found some caching errors: "%sh) failures
+  -- TODO: we could add an extra pruning pass here
 
 _buildComputation :: SparkSession -> ComputeGraph -> Try Computation
 _buildComputation session cg =
