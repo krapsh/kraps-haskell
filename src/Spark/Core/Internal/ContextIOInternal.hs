@@ -99,7 +99,6 @@ executeCommand1' ld = do
   logDebugN $ "executeCommand1: computing observable " <> show' ld
   -- Retrieve the computation graph
   let cgt = buildComputationGraph ld
-  logDebugN $ "executeCommand1: cgt= " <> show' cgt
   _ret cgt $ \cg -> do
     cgWithSourceT <- updateSourceInfo cg
     _ret cgWithSourceT $ \cgWithSource -> do
@@ -118,7 +117,6 @@ waitForCompletion comp = do
   let trackedNodes = obss <&> \n ->
         (nodeId n, nodePath n,
          unSQLType (nodeType n), nodePath n)
-  logDebugN $ "executeCommand1: Tracked nodes are " <> show' trackedNodes
   nrs' <- _computationMultiStatus (cId comp) HS.empty trackedNodes
   -- Find the main result again in the list of everything.
   -- TODO: we actually do not need all the results, just target nodes.
