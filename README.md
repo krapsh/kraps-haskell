@@ -1,4 +1,4 @@
-Karps-Haskell - Haskell bindings for Spark Datasets and Dataframes
+# Karps-Haskell - Haskell bindings for Spark Datasets and Dataframes
 
 This project is an exploration vehicle for developing safe, robust and reliable
 data pipelines over Apache Spark. It consists in multiple sub-projects:
@@ -21,8 +21,30 @@ This is a preview, the API may (will) change in the future.
 The name is a play on a tasty fish of the family Cyprinidae, and an anagram of Spark. The programming model is strongly influenced by the
 [TensorFlow project](https://www.tensorflow.org/) and follows a similar design.
 
-There is also a separate set of utilities to visualize such pipelines using
-Jupyter notebooks and IHaskell.
+
+Karps can also take advantage of the [Haskell kernel for Jupyter](https://github.com/gibiansky/IHaskell), which provides a better user
+experience and comes with beautiful introspection tools courtesy of the
+[TensorBoard server](https://www.tensorflow.org/how_tos/summaries_and_tensorboard/). Using
+Tensorboard, you can visualize, drill down, introspect the graph of computations:
+
+![image](https://github.com/krapsh/kraps-haskell/blob/37acdaf33e4bfb235acafd852e813f3747c3b3f7/notebooks/ihaskell-tensorboard.png)
+
+
+## Examples.
+
+Some notebooks that showcase the current capabilities are in the `notebooks`
+directory. Some prerendered versions are also available. Chrome seems to provide
+the best experience when playing interactively with the visualizations.
+
+  - [Intro](https://rawgit.com/krapsh/kraps-haskell/master/notebooks/rendered/00_Intro.html)
+
+  - [Datasets and observables](https://rawgit.com/krapsh/kraps-haskell/master/notebooks/rendered/01_Datasets_Dataframes_Observable_DynObservable.html)
+
+  - [Organizing workflows with paths](https://rawgit.com/krapsh/kraps-haskell/master/notebooks/rendered/02_Organizing_workflows.html)
+
+  - [Caching data](https://rawgit.com/krapsh/kraps-haskell/master/notebooks/rendered/03_Caching_data.html)
+
+  - [Column operations](https://rawgit.com/krapsh/kraps-haskell/master/notebooks/rendered/06_Column_operations.html)
 
 ## Installation (for users)
 
@@ -65,13 +87,6 @@ mycount <- exec1Def c
 ```
 
 ## Installation (GUI, for users)
-
-Karps can also take advantage of the [Haskell kernel for Jupyter](https://github.com/gibiansky/IHaskell), which provides a better user
-experience and comes with beautiful introspection tools courtesy of the
-[TensorBoard server](https://www.tensorflow.org/how_tos/summaries_and_tensorboard/). Using
-Tensorboard, you can visualize, drill down, introspect the graph of computations:
-
-![image](https://github.com/krapsh/kraps-haskell/blob/37acdaf33e4bfb235acafd852e813f3747c3b3f7/notebooks/ihaskell-tensorboard.png)
 
 IHaskell can be challenging to install, so a docker installation script is provided. You will need to install [Docker](https://www.docker.com/) on your computer to run Karps with IHaskell.
 
