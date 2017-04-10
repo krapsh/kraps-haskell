@@ -162,12 +162,12 @@ opnameCache = "org.spark.Cache"
 This function instructs Spark to unmark the dataset as cached. The disk and the
 memory used by Spark in the future.
 
-Unlike Spark, Krapsh is stricter with the uncaching operation:
+Unlike Spark, Karps is stricter with the uncaching operation:
  - the argument of cache must be a cached dataset
  - once a dataset is uncached, its cached version cannot be used again (i.e. it
    must be recomputed).
 
-Krapsh performs escape analysis and will refuse to run programs with caching
+Karps performs escape analysis and will refuse to run programs with caching
 issues.
 -}
 uncache :: ComputeNode loc a -> ComputeNode loc a

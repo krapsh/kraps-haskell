@@ -23,7 +23,7 @@ import Spark.Core.Internal.OpStructures(HdfsPath(..))
 import Spark.Core.Internal.Pruning
 import Spark.Core.Internal.DatasetStructures(UntypedNode, StructureEdge)
 
--- | The configuration of a remote spark session in krapsh.
+-- | The configuration of a remote spark session in Karps.
 data SparkSessionConf = SparkSessionConf {
  -- | The URL of the end point.
   confEndPoint :: !Text,

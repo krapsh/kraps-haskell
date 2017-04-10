@@ -25,13 +25,13 @@ import Spark.Core.Internal.FunctionsInternals(projectColFunction2', projectColFu
 import Spark.Core.Internal.Arithmetics
 
 
-{-| A generalization of the addition for the Kraps types.
+{-| A generalization of the addition for the Karps types.
 -}
 (.+) :: forall a1 a2. (Num a1, Num a2, GeneralizedHomo2 a1 a2) =>
   a1 -> a2 -> GeneralizedHomoReturn a1 a2
 (.+) = performOp (homoColOp2 "+")
 
-{-| A generalization of the negation for the Kraps types.
+{-| A generalization of the negation for the Karps types.
 -}
 (.-) :: forall a1 a2. (Num a1, Num a2, GeneralizedHomo2 a1 a2) =>
   a1 -> a2 -> GeneralizedHomoReturn a1 a2

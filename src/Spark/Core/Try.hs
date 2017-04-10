@@ -1,7 +1,7 @@
 
 {-|
 Useful classes and functions to deal with failures
-within the Krapsh framework.
+within the Karps framework.
 
 This is a developer API. Users should not have to invoke functions
 from this module.

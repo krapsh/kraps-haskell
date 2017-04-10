@@ -23,7 +23,7 @@ type SqlFunctionName = T.Text
 -}
 type UdafClassName = T.Text
 
-{-| The name of an operator defined in Kraps.
+{-| The name of an operator defined in Karps.
 -}
 type OperatorName = T.Text
 
@@ -56,7 +56,7 @@ data TransformInvariant =
     -- | This operator has no special property. It may depend on
     -- the partitioning layout, the number of partitions, the order
     -- of elements in the partitions, etc.
-    -- This sort of operator is unwelcome in Krapsh...
+    -- This sort of operator is unwelcome in Karps...
     Opaque
     -- | This operator respects the canonical partition order, but may
     -- not have the same number of elements.
@@ -84,7 +84,7 @@ data Locality =
 -- These structures declare some operations that correspond to operations found
 -- in Spark itself, or in the surrounding libraries.
 
--- | An operator defined by default in the release of Krapsh.
+-- | An operator defined by default in the release of Karps.
 -- All other physical operators can be converted to a standard operators.
 data StandardOperator = StandardOperator {
   soName :: !OperatorName,

@@ -41,7 +41,7 @@ type family GeneralizedHomoReturn x1 x2 where
 -- but it is a bit more complex to do.
 type HomoColOp2 = UntypedColumnData -> UntypedColumnData -> UntypedColumnData
 
-{-| The class of types that can be lifted to operations onto Kraps types.
+{-| The class of types that can be lifted to operations onto Karps types.
 
 This is the class for operations on homogeneous types (the inputs and the
 output have the same underlying type).

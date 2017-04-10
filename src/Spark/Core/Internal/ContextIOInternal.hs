@@ -83,7 +83,7 @@ Executes a command:
 - waits for the terminal nodes to reach a final state
 - commits the final results to the state
 
-If any failure is detected that is internal to Krapsh, it returns an error.
+If any failure is detected that is internal to Karps, it returns an error.
 If the error comes from an underlying library (http stack, programming failure),
 an exception may be thrown instead.
 -}

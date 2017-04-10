@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-{-| The structures of data types in Krapsh.
+{-| The structures of data types in Karps.
 
 For a detailed description of the supported types, see
 http://spark.apache.org/docs/latest/sql-programming-guide.html#data-types

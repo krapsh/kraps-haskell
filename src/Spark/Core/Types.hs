@@ -33,6 +33,6 @@ import Spark.Core.StructuresInternal
 import Spark.Core.Internal.FunctionsInternals(TupleEquivalence(..), NameTuple(..))
 
 -- | Description of types supported in DataSets
--- Krapsh supports a restrictive subset of Algebraic Datatypes that is amenable to SQL
+-- Karps supports a restrictive subset of Algebraic Datatypes that is amenable to SQL
 -- transformations. This file contains the description of all the supported types, and some
 -- conversion tools.

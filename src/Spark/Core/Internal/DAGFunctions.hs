@@ -6,7 +6,7 @@
 
 Because I could not find a public library for such transforms.
 
-Most krapsh manipulations are converted into graph manipulations.
+Most Karps manipulations are converted into graph manipulations.
 -}
 module Spark.Core.Internal.DAGFunctions(
   DagTry,
