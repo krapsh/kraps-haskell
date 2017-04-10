@@ -55,7 +55,7 @@ These instructions assume that the following software is installed on your compu
 _Launching Spark locally_ Assuming the `SPARK_HOME` environment variable is set
 to the location of your current installation of Spark, run:
 ```sh
-$SPARK_HOME/bin/spark-shell --packages krapsh:karps-server:0.1.0-s_2.11\
+$SPARK_HOME/bin/spark-shell --packages krapsh:karps-server:0.2.0-s_2.11\
    --name karps-server --class org.karps.Boot --master "local[1]" -v
 ```
 
