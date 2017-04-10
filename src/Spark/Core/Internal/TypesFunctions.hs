@@ -68,7 +68,7 @@ isNullable (NullableType _) = True
 -- Takes a data type (assumed to be that of a column or cell) and returns the
 -- corresponding dataset type.
 -- This should only be used when talking to Spark.
--- All visible operations in Krapsh use Cell types instead.
+-- All visible operations in Karps use Cell types instead.
 -- TODO should it use value or _1? Both seem to be used in Spark.
 frameTypeFromCol :: DataType -> StructType
 frameTypeFromCol (StrictType (Struct struct)) = struct

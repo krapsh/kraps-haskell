@@ -1,7 +1,7 @@
 FROM gibiansky/ihaskell:latest
 
 # Build:
-# docker build -t ihaskell-krapsh .
+# docker build -t ihaskell-karps .
 
 # Install pandas for nice visualizations in Python
 WORKDIR /tmp
@@ -10,11 +10,11 @@ RUN pip install requests
 
 RUN rm /ihaskell/.stack-work/install/x86_64-linux/nightly-2015-08-15/7.10.2/bin/ihaskell
 
-RUN mkdir /krapsh
-WORKDIR /krapsh
+RUN mkdir /karps
+WORKDIR /karps
 
 COPY stack-ihaskell.yaml stack.yaml
-COPY krapsh.cabal krapsh.cabal
+COPY karps.cabal karps.cabal
 COPY src src
 COPY test test
 COPY LICENSE LICENSE
@@ -30,8 +30,8 @@ RUN stack install
 
 
 # Run the notebook
-ENV PATH /krapsh/.stack-work/install/x86_64-linux/nightly-2015-08-15/7.10.2/bin:/root/.stack/snapshots/x86_64-linux/nightly-2015-08-15/7.10.2/bin:/root/.stack/programs/x86_64-linux/ghc-7.10.2/bin:/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV PATH /karps/.stack-work/install/x86_64-linux/nightly-2015-08-15/7.10.2/bin:/root/.stack/snapshots/x86_64-linux/nightly-2015-08-15/7.10.2/bin:/root/.stack/programs/x86_64-linux/ghc-7.10.2/bin:/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 RUN ihaskell install --stack
-WORKDIR /krapsh
-ENTRYPOINT stack exec -- jupyter notebook --NotebookApp.port=8888 '--NotebookApp.ip=*' --NotebookApp.notebook_dir=/krapsh
+WORKDIR /karps
+ENTRYPOINT stack exec -- jupyter notebook --NotebookApp.port=8888 '--NotebookApp.ip=*' --NotebookApp.notebook_dir=/karps
 EXPOSE 8888

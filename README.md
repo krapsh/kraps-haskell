@@ -1,39 +1,45 @@
-# Kraps-H - Haskell bindings for Spark Datasets and Dataframes
+Karps-Haskell - Haskell bindings for Spark Datasets and Dataframes
 
 This project is an exploration vehicle for developing safe, robust and reliable
 data pipelines over Apache Spark. It consists in multiple sub-projects:
- - a specification to describe data pipelines in a language-agnostic manner,
-   and a communication protocol to submit these pipelines to Spark. The language is JSON (to be switched to proto3).
- - a serving library, called krapsh-server, that implements this specification
-   on top of Spark. It is written in Scala and is loaded as a standard Spark package.
- - a client written in Haskell that sends pipelines to Spark for execution. In
-   addition, this client serves as an experimental platform for whole-program optimization and verification, as well as compiler-enforced type checking.
+- a specification to describe data pipelines in a language-agnostic manner,
+  and a communication protocol to submit these pipelines to Spark. The
+  specification is currently specified in [this repository](https://github.com/krapsh/karps-interface), using
+   [Protocol Buffers 3](https://developers.google.com/protocol-buffers/docs/proto3) (
+    which is also compatible with JSON).
+- a serving library, called
+  [karps-server](https://github.com/krapsh/kraps-server), that implements this specification on top of Spark.
+  It is written in Scala and is loaded as a standard Spark package.
+- a client written in Haskell that sends pipelines to Spark for execution. In
+  addition, this client serves as an experimental platform for whole-program optimization and verification, as well as compiler-enforced type checking.
 
 There is also a separate set of utilities to visualize such pipelines using
 Jupyter notebooks and IHaskell.
 
 This is a preview, the API may (will) change in the future.
 
-The name is a pun on the dice game called craps, because like data science, it
-is easy to start rolling dice, and there is a significant element of chance
-involved in getting any significant benefit from your data. It also happens to be the anagram of Spark. The programming model is strongly influenced by the TensorFlow project and follows a similar design.
+The name is a play on a tasty fish of the family Cyprinidae, and an anagram of Spark. The programming model is strongly influenced by the
+[TensorFlow project](https://www.tensorflow.org/) and follows a similar design.
+
+There is also a separate set of utilities to visualize such pipelines using
+Jupyter notebooks and IHaskell.
 
 ## Installation (for users)
 
 These instructions assume that the following software is installed on your computer:
- - Spark 2.x (2.1+ recommended). See the [installation instructions](http://spark.apache.org/docs/latest/#downloading) for a local install. It is usually a matter a downloading and unzipping the prebuilt binaries.
+ - Spark 2.x (2.1+ strongly recommended). See the [installation instructions](http://spark.apache.org/docs/latest/#downloading) for a local install. It is usually a matter a downloading and unzipping the prebuilt binaries.
  - the [stack build tool](https://docs.haskellstack.org/en/stable/README/)
 
 _Launching Spark locally_ Assuming the `SPARK_HOME` environment variable is set
 to the location of your current installation of Spark, run:
 ```sh
-$SPARK_HOME/bin/spark-shell --packages krapsh:kraps-server:0.1.9-s_2.11\
-   --name kraps-server --class org.krapsh.Boot --master "local[1]" -v
+$SPARK_HOME/bin/spark-shell --packages krapsh:karps-server:0.1.0-s_2.11\
+   --name karps-server --class org.karps.Boot --master "local[1]" -v
 ```
 
 You should see a flurry of log messages that ends with something like: `WARN SparkContext: Use an existing SparkContext, some configuration may not take effect.` The server is now running.
 
-_Connecting the Kraps-Haskell client_ All the integration tests should be able
+_Connecting the Karps-Haskell client_ All the integration tests should be able
 to connect to the server and execute some Spark commands:
 
 ```sh
@@ -60,21 +66,21 @@ mycount <- exec1Def c
 
 ## Installation (GUI, for users)
 
-Kraps can also take advantage of the [Haskell kernel for Jupyter](https://github.com/gibiansky/IHaskell), which provides a better user
+Karps can also take advantage of the [Haskell kernel for Jupyter](https://github.com/gibiansky/IHaskell), which provides a better user
 experience and comes with beautiful introspection tools courtesy of the
 [TensorBoard server](https://www.tensorflow.org/how_tos/summaries_and_tensorboard/). Using
 Tensorboard, you can visualize, drill down, introspect the graph of computations:
 
 ![image](https://github.com/krapsh/kraps-haskell/blob/37acdaf33e4bfb235acafd852e813f3747c3b3f7/notebooks/ihaskell-tensorboard.png)
 
-IHaskell can be challenging to install, so a docker installation script is provided. You will need to install [Docker](https://www.docker.com/) on your computer to run Kraps with IHaskell.
+IHaskell can be challenging to install, so a docker installation script is provided. You will need to install [Docker](https://www.docker.com/) on your computer to run Karps with IHaskell.
 
 In the project directory, run:
 
 ```bash
-docker build -t ihaskell-krapsh .
-docker run -it --volume $(pwd)/notebooks:/krapsh/notebooks \
-  --publish 8888:8888  ihaskell-krapsh
+docker build -t ihaskell-karps .
+docker run -it --volume $(pwd)/notebooks:/karps/notebooks \
+  --publish 8888:8888  ihaskell-karps
 ```
 
 The `notebooks` directory contains some example notebooks that you can run.
@@ -87,8 +93,34 @@ to communicate from inside a container to the local machine (if you run Spark
 outside Docker). Here is a command to launch Docker with the appropriate options:
 
 ```bash
-docker run -it --volume $(pwd)/notebooks:/krapsh/notebooks \
-  --publish 8888:8888 --add-host="localhost:10.0.2.2" ihaskell-krapsh
+docker run -it --volume $(pwd)/notebooks:/karps/notebooks \
+  --publish 8888:8888 --add-host="localhost:10.0.2.2" ihaskell-karps
+```
+
+__Standalone linux installation__ The author cannot support the vagaries of
+operating systems, especially when involving IHaskell, but here is a setup that
+has shown some success:
+
+In Ubuntu 16.04, install all the requirements of IHaskell (libgmp3-dev ghc ipython cabal-install, etc.)
+
+In the `kraps-haskell directory`, run the following commands:
+
+```bash
+export STACK_YAML=$PWD/stack-ihaskell.yaml
+stack setup 7.10.2
+# This step may be required, depending on your version of stack.
+# You will see it if you encounter some binary link issues.
+stack exec -- ghc-pkg unregister cryptonite --force
+
+stack update
+stack install ipython-kernel-0.8.3.0
+stack install ihaskell-0.8.3.0
+stack install ihaskell-blaze-0.3.0.0
+stack install ihaskell-basic-0.3.0.0
+stack install
+
+ihaskell install --stack
+stack exec --allow-different-user -- jupyter notebook --NotebookApp.port=8888 '--NotebookApp.ip=*' --NotebookApp.notebook_dir=$PWD
 ```
 
 ## Status

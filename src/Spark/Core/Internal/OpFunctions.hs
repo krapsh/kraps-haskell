@@ -128,7 +128,7 @@ _prettyShowSGO (ColumnSemiGroupLaw sfn) = sfn
 -- (internal)
 -- The extra data associated with the operation, and that is required
 -- by the backend to successfully perform the operation.
--- We pass the type as seen by krapsh (along with some extra information about
+-- We pass the type as seen by Karps (along with some extra information about
 -- nullability). This information is required by spark to analyze the exact
 -- type of some operations.
 extraNodeOpData :: NodeOp -> A.Value

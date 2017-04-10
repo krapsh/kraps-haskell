@@ -1,21 +1,20 @@
-name:                krapsh
+name:                karps
 version:             0.1.9.0
 synopsis:            Haskell bindings for Spark Dataframes and Datasets
-description:         Krapsh is an exploration vehicle for developing safe,
-                     robust and reliable data pipelines over Apache Spark, using
+description:         Karps-Haskell is an exploration vehicle for developing safe,
+                     scalable and reliable data pipelines over Apache Spark, using
                      the DataFrame API.
 
                      In order to use it, you must launch Spark with the
-                     kraps-server module installed.
+                     karps-server module installed.
 homepage:            https://github.com/krapsh/kraps-haskell
 license:             Apache-2.0
 license-file:        LICENSE
 author:              krapsh
 maintainer:          krapsh@yandex.com
-copyright:           2016 Kraps-Haskell contributors
+copyright:           2016 Karps-Haskell contributors
 category:            Web, Big data
 build-type:          Simple
--- extra-source-files:
 cabal-version:       >=1.10
 
 library
@@ -107,7 +106,7 @@ library
   default-language:    Haskell2010
 
 
-test-suite krapsh-test
+test-suite karps-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
@@ -131,7 +130,7 @@ test-suite krapsh-test
                      , bytestring
                      , containers
                      , formatting
-                     , krapsh
+                     , karps
                      , hspec >= 2.0 && < 2.3
                      , text
                      , raw-strings-qq
@@ -141,7 +140,7 @@ test-suite krapsh-test
 --  ghc-options:         -ddump-deriv -O0 -rtsopts=all -prof -auto-all
   default-language:    Haskell2010
 
-test-suite krapsh-test-integration
+test-suite karps-test-integration
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test-integration
   main-is:             Spec.hs
@@ -160,7 +159,7 @@ test-suite krapsh-test-integration
                      , bytestring
                      , containers
                      , formatting
-                     , krapsh
+                     , karps
                      , hspec == 2.*
                      , text
                      , raw-strings-qq

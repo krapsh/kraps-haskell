@@ -4,7 +4,7 @@
 
 -- This module is meant to be loaded from the IHaskell REPL.
 -- TODO move this into a subpackage
-module KrapshDagDisplay where
+module KarpsDagDisplay where
 
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as L

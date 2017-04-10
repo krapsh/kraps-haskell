@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- This module is meant to be loaded from the IHaskell REPL.
-module KrapshDisplays where
+module KarpsDisplays where
 
 import IHaskell.Display
 import Formatting
@@ -12,7 +12,7 @@ import Data.Text(unpack)
 import qualified Data.Text
 import Data.Foldable(toList)
 
-import KrapshDagDisplay(nodeToDisplayGraph, tfIFrame, DisplayGraph, exportNodes)
+import KarpsDagDisplay(nodeToDisplayGraph, tfIFrame, DisplayGraph, exportNodes)
 
 import Spark.Core.Internal.Utilities(forceRight)
 import Spark.Core.Internal.PathsUntyped

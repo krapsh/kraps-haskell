@@ -37,7 +37,7 @@ import Spark.Core.Internal.ContextInteractive
 import Spark.Core.Internal.RowGenericsFrom(FromSQL)
 
 
--- | The default configuration if the krapsh server is being run locally.
+-- | The default configuration if the Karps server is being run locally.
 defaultConf :: SparkSessionConf
 defaultConf =
   SparkSessionConf {
