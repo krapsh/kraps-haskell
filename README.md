@@ -33,8 +33,8 @@ Tensorboard, you can visualize, drill down, introspect the graph of computations
 ## Examples.
 
 Some notebooks that showcase the current capabilities are in the `notebooks`
-directory. Some prerendered versions are also available (viewing them using
-  Chrome instead of Firefox lets you play interactively with the visualizations):
+directory. Some prerendered versions are also available. Chrome seems to provide
+the best experience when playing interactively with the visualizations.
 
   - [Intro](https://rawgit.com/krapsh/kraps-haskell/master/notebooks/rendered/00_Intro.html)
 
