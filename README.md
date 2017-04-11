@@ -27,7 +27,7 @@ experience and comes with beautiful introspection tools courtesy of the
 [TensorBoard server](https://www.tensorflow.org/how_tos/summaries_and_tensorboard/). Using
 Tensorboard, you can visualize, drill down, introspect the graph of computations:
 
-![image](https://github.com/krapsh/kraps-haskell/blob/37acdaf33e4bfb235acafd852e813f3747c3b3f7/notebooks/ihaskell-tensorboard.png)
+![image](https://github.com/krapsh/kraps-haskell/raw/master/notebooks/ihaskell-tensorboard.png)
 
 
 ## Examples.
