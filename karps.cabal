@@ -1,5 +1,5 @@
 name:                karps
-version:             0.1.9.0
+version:             0.2.0.0
 synopsis:            Haskell bindings for Spark Dataframes and Datasets
 description:         Karps-Haskell is an exploration vehicle for developing safe,
                      scalable and reliable data pipelines over Apache Spark, using
